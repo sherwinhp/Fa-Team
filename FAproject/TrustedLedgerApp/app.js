@@ -60,6 +60,10 @@ app.get('/', async(req, res) => {
     }
 });
 
+app.get('/about', (req, res) => {
+  res.render('about', { acct: account });
+});
+
 app.post('/web3ConnectData', express.json(), async (req, res) => {
   try {
     const { petDataRead, contractAddress, acct, nPets } = req.body;

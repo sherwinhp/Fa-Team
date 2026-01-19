@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About Us | Blockchain Track</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+      :root {
+        --ink: #0f1a2b;
+        --muted: #5c6773;
+        --surface: #ffffff;
+        --pearl: #f6f7fb;
+        --brand: #2554ff;
+        --brand-dark: #1c2f88;
+        --accent: #0ecb81;
+        --sun: #ffb350;
+        --plum: #5428a1;
+        --radius-lg: 24px;
+        --radius-md: 16px;
+        --shadow: 0 18px 45px rgba(15, 26, 43, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #eef2ff 0%, #ffffff 55%, #f0f4ff 100%);
+        min-height: 100vh;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .page {
+        display: flex;
+        flex-direction: column;
+        gap: 72px;
+      }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid #e5e9f2;
+        backdrop-filter: blur(12px);
+      }
+
+      .nav-inner {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+      }
+
+      .logo-mark {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--brand), #6d7bff);
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 18px;
+        box-shadow: 0 10px 20px rgba(37, 84, 255, 0.25);
+      }
+
+      .nav-links {
+        display: inline-flex;
+        align-items: center;
+        gap: 18px;
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .nav-links a {
+        padding: 6px 8px;
+        border-radius: 8px;
+      }
+
+      .nav-links a.active {
+        background: #eef2ff;
+        color: var(--brand-dark);
+      }
+
+      .wallet-tag {
+        font-size: 12px;
+        color: #0a7a4a;
+        background: #e8fbf1;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid #c6f1dc;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 88px 20px 110px;
+        background: linear-gradient(140deg, #1a2a7a 0%, #2648ff 45%, #4b64ff 100%);
+        color: #fff;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 179, 80, 0.35), rgba(255, 179, 80, 0));
+        top: -140px;
+        right: -100px;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        border-radius: 40%;
+        background: radial-gradient(circle, rgba(14, 203, 129, 0.3), rgba(14, 203, 129, 0));
+        bottom: -280px;
+        left: -160px;
+      }
+
+      .hero-inner {
+        max-width: 1100px;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 28px;
+      }
+
+      .hero h1 {
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(2.5rem, 4vw, 3.8rem);
+        margin: 0;
+        max-width: 620px;
+      }
+
+      .hero p {
+        font-size: 18px;
+        line-height: 1.6;
+        max-width: 640px;
+        color: rgba(255, 255, 255, 0.88);
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .cta {
+        padding: 12px 22px;
+        background: #fff;
+        color: #1a2a7a;
+        font-weight: 600;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .section {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      .section h2 {
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(1.8rem, 3vw, 2.6rem);
+        margin: 0 0 12px;
+      }
+
+      .section p.lead {
+        margin: 0;
+        max-width: 700px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .grid {
+        margin-top: 32px;
+        display: grid;
+        gap: 20px;
+      }
+
+      .grid.cols-3 {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .grid.cols-2 {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        background: var(--surface);
+        border-radius: var(--radius-md);
+        padding: 22px;
+        border: 1px solid #e7eaf3;
+        box-shadow: var(--shadow);
+      }
+
+      .card.small {
+        box-shadow: none;
+        background: var(--pearl);
+      }
+
+      .card h3 {
+        margin: 12px 0 8px;
+        font-size: 18px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .icon.blue {
+        background: linear-gradient(135deg, #2b5cff, #1a2a7a);
+      }
+
+      .icon.green {
+        background: linear-gradient(135deg, #19d48f, #0b8f5f);
+      }
+
+      .icon.sun {
+        background: linear-gradient(135deg, #ffb14c, #f0713c);
+      }
+
+      .icon.plum {
+        background: linear-gradient(135deg, #6d46ff, #5428a1);
+      }
+
+      .steps {
+        display: grid;
+        gap: 18px;
+        margin-top: 26px;
+      }
+
+      .step {
+        padding: 18px 20px;
+        border-radius: 14px;
+        background: #fff;
+        border: 1px solid #e7eaf3;
+        display: grid;
+        gap: 6px;
+      }
+
+      .step span {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #8a93a0;
+      }
+
+      .split {
+        display: grid;
+        gap: 24px;
+        align-items: center;
+      }
+
+      .split.media {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .stats {
+        display: grid;
+        gap: 18px;
+        margin-top: 22px;
+      }
+
+      .stat {
+        background: #fff;
+        border: 1px solid #e7eaf3;
+        border-radius: 16px;
+        padding: 18px;
+        text-align: center;
+      }
+
+      .stat h4 {
+        margin: 0;
+        font-size: 22px;
+        color: var(--brand);
+      }
+
+      .stat p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .team {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+
+      .member {
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px solid #e7eaf3;
+        background: #fff;
+      }
+
+      .member .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f1f4ff;
+        color: var(--brand-dark);
+        margin-bottom: 10px;
+      }
+
+      .member h4 {
+        margin: 0 0 6px;
+      }
+
+      .member p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .footer {
+        padding: 34px 20px 48px;
+        background: #0f1a2b;
+        color: #cfd6e4;
+      }
+
+      .footer-inner {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .footer a {
+        color: #cfd6e4;
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        animation: rise 0.8s ease forwards;
+        animation-delay: var(--d, 0s);
+      }
+
+      @keyframes rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 720px) {
+        .nav-links {
+          display: none;
+        }
+
+        .hero {
+          padding: 76px 18px 90px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <nav class="nav">
+        <div class="nav-inner">
+          <a class="logo" href="/">
+            <span class="logo-mark">BT</span>
+            Blockchain Track
+          </a>
+          <div class="nav-links">
+            <a href="/">Marketplace</a>
+            <a class="active" href="/about">About Us</a>
+          </div>
+          <div class="wallet-tag">
+            Blockchain Secured
+          </div>
+        </div>
+      </nav>
+
+      <header class="hero">
+        <div class="hero-inner">
+          <div class="pill reveal" style="--d: 0.05s;">Built for verified commerce</div>
+          <h1 class="reveal" style="--d: 0.1s;">We make every transaction provable, transparent, and fair.</h1>
+          <p class="reveal" style="--d: 0.2s;">
+            Blockchain Track is a Singapore-based marketplace focused on authentic listings, tamper-proof delivery
+            trails, and automated dispute resolution. We build the trust layer between buyers and sellers.
+          </p>
+          <div class="hero-actions reveal" style="--d: 0.3s;">
+            <a class="cta" href="/">Explore Marketplace</a>
+            <div class="pill">Founded 2023</div>
+            <% if (acct) { %>
+              <div class="pill">Wallet: <%= acct %></div>
+            <% } %>
+          </div>
+        </div>
+      </header>
+
+      <section class="section">
+        <h2 class="reveal" style="--d: 0.05s;">Our mission</h2>
+        <p class="lead reveal" style="--d: 0.1s;">
+          We help fast-growing commerce teams ship with confidence by pairing blockchain provenance with modern
+          marketplace UX. The result is faster trust, fewer disputes, and verifiable product histories.
+        </p>
+        <div class="grid cols-3">
+          <div class="card reveal" style="--d: 0.15s;">
+            <div class="icon blue">01</div>
+            <h3>End-to-end traceability</h3>
+            <p>Every listing, shipment, and delivery update is anchored to a verifiable ledger.</p>
+          </div>
+          <div class="card reveal" style="--d: 0.2s;">
+            <div class="icon green">02</div>
+            <h3>Automated safeguards</h3>
+            <p>Smart contracts hold funds in escrow and release only after confirmed delivery.</p>
+          </div>
+          <div class="card reveal" style="--d: 0.25s;">
+            <div class="icon sun">03</div>
+            <h3>Trust signals buyers see</h3>
+            <p>Verified seller reputation, immutable reviews, and proof of authenticity.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="split media">
+          <div class="reveal" style="--d: 0.05s;">
+            <h2>How we build trust</h2>
+            <p class="lead">
+              We unite smart contracts, verified identities, and logistics proof to reduce chargebacks and speed
+              up settlements.
+            </p>
+            <div class="steps">
+              <div class="step">
+                <span>Step 01</span>
+                <strong>Verify sellers and listings</strong>
+                <p>Onboarded merchants are screened and tied to on-chain IDs.</p>
+              </div>
+              <div class="step">
+                <span>Step 02</span>
+                <strong>Record every event</strong>
+                <p>Orders, shipping scans, and delivery confirmations are signed and stored.</p>
+              </div>
+              <div class="step">
+                <span>Step 03</span>
+                <strong>Resolve disputes fast</strong>
+                <p>Immutable data makes chargeback investigations quick and fair.</p>
+              </div>
+            </div>
+          </div>
+          <div class="card small reveal" style="--d: 0.1s;">
+            <h3>Why it matters</h3>
+            <p>
+              Traditional marketplaces rely on centralized records. Blockchain Track distributes trust so buyers,
+              sellers, and regulators can verify independently.
+            </p>
+            <div class="grid cols-2">
+              <div class="card">
+                <div class="icon plum">A</div>
+                <h3>Audit-ready</h3>
+                <p>Every transaction has a signed trail.</p>
+              </div>
+              <div class="card">
+                <div class="icon sun">B</div>
+                <h3>Fewer disputes</h3>
+                <p>Immutable proofs reduce fraud and chargebacks.</p>
+              </div>
+              <div class="card">
+                <div class="icon green">C</div>
+                <h3>Faster payouts</h3>
+                <p>Instant releases after verified delivery.</p>
+              </div>
+              <div class="card">
+                <div class="icon blue">D</div>
+                <h3>Buyer confidence</h3>
+                <p>Customers can validate origin and handling.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="reveal" style="--d: 0.05s;">Our team</h2>
+        <p class="lead reveal" style="--d: 0.1s;">
+          A multidisciplinary crew blending blockchain engineering, logistics ops, and marketplace design.
+        </p>
+        <div class="team">
+          <div class="member reveal" style="--d: 0.15s;">
+            <div class="badge">Product</div>
+            <h4>Market Strategy</h4>
+            <p>Defines go-to-market focus for verified commerce across SEA.</p>
+          </div>
+          <div class="member reveal" style="--d: 0.2s;">
+            <div class="badge">Engineering</div>
+            <h4>Smart Contract Ops</h4>
+            <p>Builds escrow logic, reputation proofs, and audit trails.</p>
+          </div>
+          <div class="member reveal" style="--d: 0.25s;">
+            <div class="badge">Trust</div>
+            <h4>Risk & Compliance</h4>
+            <p>Ensures dispute workflows are fair, fast, and transparent.</p>
+          </div>
+          <div class="member reveal" style="--d: 0.3s;">
+            <div class="badge">Design</div>
+            <h4>Marketplace UX</h4>
+            <p>Crafts buyer journeys that surface proof without friction.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="card reveal" style="--d: 0.1s;">
+          <div class="split media">
+            <div>
+              <h2>Based in Singapore</h2>
+              <p class="lead">
+                Our team collaborates with regional partners to strengthen authenticity, traceability, and
+                commerce resilience across Southeast Asia.
+              </p>
+            </div>
+            <div class="stats">
+              <div class="stat">
+                <h4>2023</h4>
+                <p>Founded</p>
+              </div>
+              <div class="stat">
+                <h4>5,000+</h4>
+                <p>Verified Sellers</p>
+              </div>
+              <div class="stat">
+                <h4>50,000+</h4>
+                <p>On-chain Transactions</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="footer-inner">
+          <strong>Blockchain Track</strong>
+          <span>Singapore, SG 049419</span>
+          <span>hello@blockchaintrack.sg</span>
+          <span>+65 6123 4567</span>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
