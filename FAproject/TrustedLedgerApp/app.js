@@ -47,6 +47,7 @@ app.get('/', async(req, res) => {
             acct: account,
             cnt: shipmentCount,
             shipments: listOfShipments,
+            products: [],
             status: loading,
             addObject : JSON.stringify(addObj),
             addFunction : addFunc,
@@ -60,6 +61,18 @@ app.get('/', async(req, res) => {
 
 app.get('/about', (req, res) => {
   res.render('about', { acct: account });
+});
+
+// Add product page
+app.get('/addproduct', (req, res) => {
+  res.render('addProduct', {
+    acct: account,
+    products: [],
+    status: loading,
+    addObject : JSON.stringify(addObj),
+    addFunction : addFunc,
+    addStatus : addEnabled
+  });
 });
 
 // Shipping tracker page 
