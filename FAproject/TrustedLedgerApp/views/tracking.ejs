@@ -1,0 +1,440 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blockchain Shipping Tracker</title>
+  <style>
+    :root{
+      --bg:#f6f8fc;
+      --card:#ffffff;
+      --muted:#6b7280;
+      --text:#111827;
+      --line:#e5e7eb;
+      --soft:#f1f5ff;
+      --green:#16a34a;
+      --greenSoft:#eaf8ef;
+      --blue:#2563eb;
+      --blueSoft:#eef4ff;
+      --shadow:0 8px 30px rgba(17,24,39,.08);
+      --radius:18px;
+    }
+ 
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg);
+      color:var(--text);
+    }
+ 
+    .wrap{
+      max-width:1200px;
+      margin:30px auto;
+      padding:0 18px;
+    }
+ 
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:22px;
+    }
+ 
+    .card{
+      background:var(--card);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:22px;
+      border:1px solid rgba(229,231,235,.7);
+    }
+ 
+    .cardHeader{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:700;
+      margin-bottom:16px;
+    }
+    .icon{
+      width:28px;height:28px;
+      border-radius:10px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--soft);
+      color:var(--blue);
+      font-weight:800;
+    }
+ 
+    .infoBox{
+      background:var(--soft);
+      border-radius:14px;
+      padding:14px 16px;
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:18px;
+    }
+    .infoCol{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .kv{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      font-size:14px;
+      color:var(--muted);
+    }
+    .kv b{
+      color:var(--text);
+      font-weight:700;
+      min-width:130px;
+      display:inline-block;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid rgba(229,231,235,.9);
+      font-size:13px;
+      font-weight:600;
+      color:#111827;
+      white-space:nowrap;
+    }
+ 
+    /* Timeline */
+    .timeline{
+      margin-top:6px;
+      padding-left:4px;
+    }
+    .tlItem{
+      display:grid;
+      grid-template-columns: 34px 1fr auto;
+      gap:14px;
+      padding:14px 0;
+      align-items:flex-start;
+    }
+    .tlLine{
+      position:relative;
+      width:34px;
+      display:flex;
+      justify-content:center;
+    }
+    .tlLine::before{
+      content:"";
+      position:absolute;
+      top:22px;
+      bottom:-18px;
+      width:3px;
+      border-radius:3px;
+      background:var(--line);
+    }
+    .tlItem:last-child .tlLine::before{ display:none; }
+ 
+    .dot{
+      width:26px;height:26px;
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#fff;
+      border:3px solid var(--line);
+      color:var(--muted);
+      font-size:14px;
+      margin-top:2px;
+    }
+ 
+    .tlMain h4{
+      margin:0;
+      font-size:16px;
+      font-weight:800;
+    }
+    .tlSub{
+      margin-top:6px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .pin{
+      width:16px;height:16px; opacity:.75;
+    }
+    .tlDate{
+      font-size:14px;
+      color:var(--muted);
+      padding-top:2px;
+      white-space:nowrap;
+    }
+ 
+    .tlItem.done .dot{
+      border-color:var(--green);
+      background:var(--green);
+      color:#fff;
+    }
+    .tlItem.done .tlLine::before{ background:rgba(22,163,74,.35); }
+ 
+    .tlItem.pending .dot{
+      border-color:var(--line);
+      background:#f3f4f6;
+      color:#9ca3af;
+    }
+ 
+    /* Right panel */
+    .rightTop{
+      background:var(--soft);
+      border-radius:14px;
+      padding:16px;
+      margin-bottom:18px;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:10px 0;
+      font-size:15px;
+      color:var(--muted);
+    }
+    .row b{
+      color:var(--text);
+      font-weight:700;
+    }
+    .greenText{
+      color:var(--green);
+      font-weight:800;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+ 
+    .sectionTitle{
+      font-weight:800;
+      margin:12px 0 10px;
+      font-size:16px;
+    }
+    .checkList{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-bottom:16px;
+    }
+    .check{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      color:#111827;
+      font-size:14.5px;
+    }
+    .checkMark{
+      width:18px;height:18px;
+      border-radius:50%;
+      background:var(--greenSoft);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--green);
+      font-weight:900;
+      flex:0 0 auto;
+      margin-top:1px;
+    }
+ 
+    .how{
+      background:var(--blueSoft);
+      border:1px solid rgba(37,99,235,.25);
+      border-radius:14px;
+      padding:16px;
+    }
+    .how h3{
+      margin:0 0 10px;
+      color:#1e3a8a;
+      font-size:18px;
+    }
+    .how ol{
+      margin:0;
+      padding-left:18px;
+      color:#1e40af;
+      line-height:1.7;
+      font-size:14.5px;
+    }
+ 
+    .notice{
+      margin-top:18px;
+      background:var(--greenSoft);
+      border:1px solid rgba(22,163,74,.25);
+      border-radius:14px;
+      padding:14px 16px;
+      color:#065f46;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      font-size:14.5px;
+    }
+ 
+    @media (max-width: 980px){
+      .grid{ grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+ 
+<body>
+  <div class="wrap">
+    <div class="grid">
+ 
+      <!-- LEFT -->
+      <section class="card">
+        <div class="cardHeader">
+          <span class="icon">🚚</span>
+          <span>Blockchain Shipping Tracker</span>
+        </div>
+ 
+        <div class="infoBox">
+          <div class="infoCol">
+            <div class="kv"><b>Smart Contract ID:</b> <span id="contractId">—</span></div>
+            <div class="kv"><b>Last Verified:</b> <span id="lastVerified">—</span></div>
+          </div>
+          <span class="pill" id="trackingIdPill">Tracking: —</span>
+        </div>
+ 
+        <div class="timeline" id="timeline"></div>
+ 
+        <div class="notice">
+          <span style="font-size:18px;">🛡️</span>
+          <div>
+            All tracking updates are recorded on the blockchain and cannot be tampered with.
+            Payment will be automatically released to the seller upon delivery confirmation.
+          </div>
+        </div>
+      </section>
+ 
+      <!-- RIGHT -->
+      <section class="card">
+        <div class="cardHeader">
+          <span class="icon">📦</span>
+          <span>Shipping Information</span>
+        </div>
+ 
+        <div class="rightTop">
+          <div class="row">
+            <span>Delivery Method:</span>
+            <span class="pill" id="deliveryMethod">—</span>
+          </div>
+          <div class="row">
+            <span>Estimated Delivery:</span>
+            <b id="estimatedDelivery">—</b>
+          </div>
+          <div class="row">
+            <span>Tracking:</span>
+            <span class="greenText">✅ <span id="trackingLabel">Real-time blockchain tracking</span></span>
+          </div>
+        </div>
+ 
+        <div class="sectionTitle">Blockchain Benefits:</div>
+        <div class="checkList">
+          <div class="check"><span class="checkMark">✓</span>Real-time tracking updates verified on blockchain</div>
+          <div class="check"><span class="checkMark">✓</span>Tamper-proof delivery confirmation</div>
+          <div class="check"><span class="checkMark">✓</span>Automated payment release via smart contract</div>
+          <div class="check"><span class="checkMark">✓</span>Complete transparency throughout shipping process</div>
+          <div class="check"><span class="checkMark">✓</span>Dispute resolution with immutable delivery records</div>
+        </div>
+ 
+        <div class="how">
+          <h3>How It Works</h3>
+          <ol>
+            <li>Purchase creates a smart contract on blockchain</li>
+            <li>Each shipping milestone is verified and recorded</li>
+            <li>Real-time updates accessible to buyer and seller</li>
+            <li>Payment held in escrow until delivery confirmed</li>
+            <li>Automatic payment release upon successful delivery</li>
+          </ol>
+        </div>
+      </section>
+ 
+    </div>
+  </div>
+ 
+  <script>
+    // Change this depending on your routing:
+    // Example: /tracking.html?trackingId=TRK-123456
+    const params = new URLSearchParams(window.location.search);
+    const trackingId = params.get("trackingId") || "TRK-123456";
+ 
+    const el = (id) => document.getElementById(id);
+ 
+    function fmtDate(iso){
+      if(!iso) return "Pending";
+      const d = new Date(iso);
+      // Example format close to your screenshot: 01/12/2025, 2:45:00 pm
+      const dd = String(d.getDate()).padStart(2,"0");
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const yyyy = d.getFullYear();
+      let h = d.getHours();
+      const ampm = h >= 12 ? "pm" : "am";
+      h = h % 12; if(h === 0) h = 12;
+      const min = String(d.getMinutes()).padStart(2,"0");
+      const sec = String(d.getSeconds()).padStart(2,"0");
+      return `${dd}/${mm}/${yyyy}, ${h}:${min}:${sec} ${ampm}`;
+    }
+ 
+    function tlItemHTML(ev){
+      const done = !!ev.timestamp;
+      const cls = done ? "tlItem done" : "tlItem pending";
+      const rightDate = done ? new Date(ev.timestamp).toISOString().slice(0,10) : "Pending";
+ 
+      return `
+        <div class="${cls}">
+          <div class="tlLine">
+            <div class="dot">${done ? "✓" : "🕒"}</div>
+          </div>
+ 
+          <div class="tlMain">
+            <h4>${ev.title}</h4>
+            <div class="tlSub">
+              <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 21s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11Z"></path>
+                <circle cx="12" cy="10" r="2"></circle>
+              </svg>
+              <span>${ev.location || "—"}</span>
+            </div>
+          </div>
+ 
+          <div class="tlDate">${rightDate}</div>
+        </div>
+      `;
+    }
+ 
+    async function loadTracking(){
+      el("trackingIdPill").textContent = `Tracking: ${trackingId}`;
+ 
+      // Frontend calls your backend:
+      // You implement this API in your server (Express / Flask / etc.)
+      const res = await fetch(`/api/shipping/${encodeURIComponent(trackingId)}`);
+      if(!res.ok){
+        el("timeline").innerHTML = `<div style="color:#b91c1c;font-weight:700;">Failed to load tracking info.</div>`;
+        return;
+      }
+ 
+      const data = await res.json();
+ 
+      el("contractId").textContent = data.smartContractId || "—";
+      el("lastVerified").textContent = fmtDate(data.lastVerified);
+      el("deliveryMethod").textContent = data.deliveryMethod || "—";
+      el("estimatedDelivery").textContent = data.estimatedDelivery || "—";
+      el("trackingLabel").textContent = data.trackingLabel || "Real-time blockchain tracking";
+ 
+      el("timeline").innerHTML = (data.events || []).map(tlItemHTML).join("");
+    }
+ 
+    loadTracking();
+  </script>
+</body>
+</html>
+ 
+ 
+ 
