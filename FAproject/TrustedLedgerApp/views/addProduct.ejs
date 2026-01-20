@@ -1,66 +1,204 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Blockchain Marketplace</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add Product | Blockchain Marketplace</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+    :root {
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --blue-50: #eff6ff;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+      color: var(--gray-900);
+      background: radial-gradient(circle at top, #f4f6ff 0%, #ffffff 55%, #eef2ff 100%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #3b82f6 100%);
+      border-radius: 24px;
+      padding: 36px 32px;
+      color: #fff;
+      margin-bottom: 28px;
+    }
+
+    .header h1 {
+      font-family: "Fraunces", Georgia, serif;
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 2.6rem);
+    }
+
+    .header p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      padding: 24px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin-bottom: 8px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--gray-200);
+      font-family: inherit;
+      font-size: 14px;
+      background: var(--gray-50);
+      color: var(--gray-900);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 18px;
+      border-radius: 999px;
+      border: none;
+      background: var(--blue-600);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--gray-500);
+      margin-top: 6px;
+    }
+
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
+  <%- include('partials/navbar', { acct }) %>
 
-<%- include('partials/navbar', { acct }) %>
+  <div class="page">
+    <section class="header">
+      <h1>Add a Verified Product</h1>
+      <p>Create a new listing and anchor it to the blockchain marketplace.</p>
+    </section>
 
-<section class="hero">
-<h1>Blockchain-Secured Marketplace</h1>
-<p>Every product is transparently tracked on blockchain</p>
-<input class="search" placeholder="Search products..." />
-</section>
-
-<section class="products">
-
-<div class="products-header">
-    <h2>Featured Products</h2>
-
-    <a href="/addproduct" class="primary-btn">
-    ➕ Add Product
-    </a>
-</div>
-
-<% if (status) { %>
-    <p class="loading">🔄 Loading blockchain data...</p>
-<% } %>
-
-<div class="grid">
-    <% products.forEach(item => { %>
     <div class="card">
-        <img src="/images/default-product.jpeg">
+      <% if (error) { %>
+        <div class="error"><%= error %></div>
+      <% } %>
 
-        <div class="card-body">
-        <span class="badge">
-            <%= item.productInfo.category || "Verified" %>
-        </span>
-
-        <h3><%= item.productInfo.name %></h3>
-        
-        <p><%= item.productInfo.description %></p>
-
-        <div class="price">
-            $<%= item.productInfo.price %>
+      <form action="/addproduct" method="POST">
+        <div class="form-grid">
+          <div>
+            <label for="name">Product Name *</label>
+            <input id="name" name="name" required value="<%= formData.name || '' %>" />
+          </div>
+          <div>
+            <label for="price">Price (ETHR) *</label>
+            <input id="price" name="price" type="number" step="0.01" required value="<%= formData.price || '' %>" />
+          </div>
+          <div>
+            <label for="category">Category</label>
+            <input id="category" name="category" value="<%= formData.category || '' %>" />
+          </div>
+          <div>
+            <label for="stock">Stock</label>
+            <input id="stock" name="stock" type="number" min="0" value="<%= formData.stock || '' %>" />
+          </div>
+          <div class="full">
+            <label for="description">Short Description *</label>
+            <textarea id="description" name="description" required><%= formData.description || '' %></textarea>
+          </div>
+          <div class="full">
+            <label for="fullDescription">Full Description</label>
+            <textarea id="fullDescription" name="fullDescription"><%= formData.fullDescription || '' %></textarea>
+          </div>
+          <div class="full">
+            <label for="features">Key Features (one per line)</label>
+            <textarea id="features" name="features"><%= formData.features || '' %></textarea>
+            <div class="hint">Example: Active Noise Cancellation</div>
+          </div>
+          <div class="full">
+            <label for="specifications">Specifications (Label: Value, one per line)</label>
+            <textarea id="specifications" name="specifications"><%= formData.specifications || '' %></textarea>
+            <div class="hint">Example: Battery Life: 30 hours</div>
+          </div>
+          <div class="full">
+            <label for="imageUrls">Image URLs (comma or newline separated)</label>
+            <textarea id="imageUrls" name="imageUrls"><%= formData.imageUrls || '' %></textarea>
+          </div>
+          <div>
+            <label for="sellerName">Seller Name</label>
+            <input id="sellerName" name="sellerName" value="<%= formData.sellerName || '' %>" />
+          </div>
         </div>
 
-        <a class="btn" href="/product/<%= item.id %>">
-            View Details
-        </a>
+        <div style="margin-top: 20px;">
+          <button class="btn" type="submit">Add Product</button>
         </div>
+      </form>
     </div>
-    <% }) %>
-</div>
-</section>
-
-<% if (addStatus) { %>
-<script>
-console.log("Blockchain Function:", "<%= addFunction %>");
-console.log("Payload:", <%- addObject %>);
-</script>
-<% } %>
-
+  </div>
 </body>
 </html>

@@ -23,6 +23,178 @@ let shipmentCount = 0;
 let loading = true;  
 let web3Instance = null;
 let contractInstance = null;   
+
+const mockProducts = [
+  {
+    id: "1",
+    productInfo: {
+      name: "Premium Wireless Headphones",
+      description: "Flagship wireless headphones with ANC and premium build.",
+      price: "299.99",
+      category: "Audio"
+    },
+    seller: {
+      name: "TechHub Singapore",
+      rating: 98.5,
+      sales: 1247,
+      verified: true
+    },
+    stock: 45,
+    status: "In Stock",
+    fullDescription:
+      "Experience superior sound quality with our flagship wireless headphones. Featuring active noise cancellation, 30-hour battery life, and premium build quality. These headphones deliver an immersive audio experience whether you're traveling, working, or relaxing.",
+    features: [
+      "Active Noise Cancellation (ANC) - Block out ambient noise",
+      "30-hour battery life on a single charge",
+      "Premium build quality with aluminum frame",
+      "Bluetooth 5.0 for stable, long-range connectivity",
+      "Comfortable memory foam ear cushions",
+      "Foldable design with premium carrying case",
+      "Multi-device pairing support",
+      "Touch controls for easy operation"
+    ],
+    images: [
+      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
+      "https://images.unsplash.com/photo-1484704849700-f032a568e944",
+      "https://images.unsplash.com/photo-1546435770-a3e426bf472b",
+      "https://images.unsplash.com/photo-1487215078519-e21cc028cb29"
+    ],
+    specifications: [
+      { label: "Brand", value: "AudioTech Pro" },
+      { label: "Model Number", value: "AT-PRO-3000" },
+      { label: "Color", value: "Midnight Black" },
+      { label: "Connectivity", value: "Bluetooth 5.0, 3.5mm jack" },
+      { label: "Battery Life", value: "30 hours (ANC on), 40 hours (ANC off)" },
+      { label: "Charging", value: "USB-C, Fast Charge (10min = 5hrs)" },
+      { label: "Weight", value: "250g" },
+      { label: "Warranty", value: "2 Years International Warranty" },
+      { label: "Driver Size", value: "40mm dynamic drivers" },
+      { label: "Frequency Response", value: "20Hz - 20kHz" },
+      { label: "Impedance", value: "32 Ohm" },
+      { label: "Noise Cancellation", value: "Hybrid ANC up to 30dB" }
+    ],
+    blockchain: {
+      smartContractId: "0x7a9f0b8c2d1a4e3f5b6c7d8e9f0a1b2c3d4e5f6a",
+      lastVerified: "Dec 1, 2025 08:30 AM"
+    },
+    rating: 4.8,
+    reviewCount: 2547
+  }
+];
+
+const mockReviews = [
+  {
+    id: "r1",
+    reviewerName: "Alicia T.",
+    rating: 5,
+    date: "2025-11-21",
+    title: "Best audio I have owned",
+    comment:
+      "Comfortable fit, deep bass, and crystal clear highs. The ANC is excellent for commuting.",
+    verifiedPurchase: true,
+    helpfulVotes: 24,
+    blockchainTxHash: "0x2f1b1b2a7c15a9c8b61a6cdd0d0be031f4ed5c0f2c2fa9e9c7a5c9c1a2b4f8e1"
+  },
+  {
+    id: "r2",
+    reviewerName: "Mika S.",
+    rating: 4,
+    date: "2025-11-10",
+    title: "Great sound, battery lasts",
+    comment:
+      "Battery easily lasts all week. Wish the carry case was a bit smaller.",
+    verifiedPurchase: true,
+    helpfulVotes: 12,
+    blockchainTxHash: "0x8a4c2f6c9d5e1f7a3b0e6c1d2a7f5c9b3e1a4c5f6b7d8e9f0a1b2c3d4e5f6a7"
+  },
+  {
+    id: "r3",
+    reviewerName: "Jordan K.",
+    rating: 5,
+    date: "2025-10-02",
+    title: "Premium feel and fast pairing",
+    comment:
+      "Connected instantly and the build quality feels top notch. Highly recommended.",
+    verifiedPurchase: false,
+    helpfulVotes: 5,
+    blockchainTxHash: "0x6b2f3a1c9d8e7f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1"
+  }
+];
+
+let products = [...mockProducts];
+
+function parseList(input) {
+  if (!input) return [];
+  return input
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseSpecs(input) {
+  if (!input) return [];
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [label, ...rest] = line.split(":");
+      const value = rest.join(":").trim();
+      return {
+        label: label.trim(),
+        value: value || "N/A"
+      };
+    })
+    .filter((spec) => spec.label);
+}
+
+function buildProductFromForm(body) {
+  const now = new Date();
+  const images = parseList(body.imageUrls);
+  const features = parseList(body.features);
+  const specifications = parseSpecs(body.specifications);
+  const priceValue = Number(body.price);
+  const stockValue = Number(body.stock);
+
+  return {
+    id: String(Date.now()),
+    productInfo: {
+      name: body.name.trim(),
+      description: body.description.trim(),
+      price: Number.isFinite(priceValue) ? priceValue.toFixed(2) : "0.00",
+      category: body.category ? body.category.trim() : "Verified"
+    },
+    seller: {
+      name: body.sellerName ? body.sellerName.trim() : "Marketplace Seller",
+      rating: 0,
+      sales: 0,
+      verified: false
+    },
+    stock: Number.isFinite(stockValue) ? stockValue : 0,
+    status: Number.isFinite(stockValue) && stockValue > 0 ? "In Stock" : "Out of Stock",
+    fullDescription: body.fullDescription ? body.fullDescription.trim() : body.description.trim(),
+    features: features.length ? features : ["Blockchain verified authenticity", "Secure marketplace escrow"],
+    images: images.length ? images : ["/images/default-product.jpeg"],
+    specifications: specifications.length
+      ? specifications
+      : [
+          { label: "Category", value: body.category || "Verified" },
+          { label: "Stock", value: String(stockValue || 0) }
+        ],
+    blockchain: {
+      smartContractId: "0x" + Math.random().toString(16).slice(2, 42).padEnd(40, "0"),
+      lastVerified: now.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    },
+    rating: 0,
+    reviewCount: 0
+  };
+}
  
 // Define routes - home page
 app.get('/', async(req, res) => {   
@@ -32,8 +204,11 @@ app.get('/', async(req, res) => {
         acct: account,
         cnt: shipmentCount,
         shipments: [],
-        products: [],
-        status: loading
+        products: products,
+        status: loading,
+        addObject: null,
+        addFunction: null,
+        addStatus: false
       });
     } catch (error) {
         console.error('Error in home route:', error);
@@ -43,6 +218,63 @@ app.get('/', async(req, res) => {
 
 app.get('/about', (req, res) => {
   res.render('about', { acct: account });
+});
+
+// Add product page
+app.get('/addproduct', (req, res) => {
+  res.render('addProduct', {
+    acct: account,
+    products: products,
+    status: loading,
+    addObject: null,
+    addFunction: null,
+    addStatus: false,
+    error: null,
+    formData: {}
+  });
+});
+
+app.post('/addproduct', (req, res) => {
+  const { name, description, price } = req.body;
+
+  if (!name || !description || !price) {
+    return res.status(400).render('addProduct', {
+      acct: account,
+      products: products,
+      status: loading,
+      addObject: null,
+      addFunction: null,
+      addStatus: false,
+      error: 'Please fill in product name, description, and price.',
+      formData: req.body
+    });
+  }
+
+  const newProduct = buildProductFromForm(req.body);
+  products.unshift(newProduct);
+  return res.redirect('/');
+});
+
+app.get('/product/:id', (req, res) => {
+  const { id } = req.params;
+  const product = products.find((item) => item.id === id) || products[0];
+  const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  mockReviews.forEach((review) => {
+    ratingCounts[review.rating] += 1;
+  });
+  const totalReviews = mockReviews.length || 1;
+  const ratingDistribution = {};
+  for (let i = 1; i <= 5; i += 1) {
+    ratingDistribution[i] = Math.round((ratingCounts[i] / totalReviews) * 100);
+  }
+
+  res.render('product', {
+    acct: account,
+    product,
+    reviews: mockReviews,
+    ratingCounts,
+    ratingDistribution
+  });
 });
 
 // Shipping tracker page 
