@@ -220,6 +220,50 @@ app.get('/about', (req, res) => {
   res.render('about', { acct: account });
 });
 
+app.get('/wallet', (req, res) => {
+  const wallet = {
+    totalBalance: "5000.00",
+    symbol: "ETHR",
+    ethBalance: "2.4500",
+    ethUsd: "$7,840.00 USD",
+    tokenBalance: "5000.00",
+    tokenUsd: "$5,000.00 USD",
+    address: "0x742d35Cc6634C0532925a3b844Bc9e7595F0bEb",
+    token: {
+      name: "Ethereum",
+      symbol: "ETHR",
+      contractAddress: "0x1f9a8a35f8a5b51017f2b9f63d04c2a1f984",
+      totalSupply: "1,000,000 ETHR",
+      standard: "ERC-20 Standard Token"
+    },
+    transactions: [
+      {
+        type: "Payment",
+        date: "28/11/2025, 6:30:00 pm",
+        tx: "0x8f2a...93dc",
+        amount: "-299.99 ETHR",
+        status: "completed"
+      },
+      {
+        type: "Delivery",
+        date: "30/11/2025, 10:20:00 pm",
+        tx: "0x8b7e...2a1d",
+        amount: "125.00 ETHR",
+        status: "completed"
+      },
+      {
+        type: "Payment",
+        date: "01/12/2025, 5:15:00 pm",
+        tx: "0x5d9a...4c8b",
+        amount: "-89.9 ETHR",
+        status: "pending"
+      }
+    ]
+  };
+
+  res.render('wallet', { acct: account, wallet });
+});
+
 // Add product page
 app.get('/addproduct', (req, res) => {
   res.render('addProduct', {
