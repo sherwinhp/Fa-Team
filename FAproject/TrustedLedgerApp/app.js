@@ -1,4 +1,5 @@
 const express = require('express');
+const session = require('express-session');
 const {Web3} = require('web3');
 const fs = require("fs");
 
@@ -13,6 +14,18 @@ app.use(express.static('public'))
 app.use(express.urlencoded({
     extended: false
 }));
+app.use(session({
+  secret: "blockchain-track-session",
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use((req, res, next) => {
+  res.locals.isLoggedIn = Boolean(req.session && req.session.user);
+  res.locals.userRole = req.session && req.session.user ? req.session.user.role : null;
+  res.locals.userEmail = req.session && req.session.user ? req.session.user.email : null;
+  next();
+});
 
 //start the server
 const PORT = process.env.PORT || 3001;
@@ -148,6 +161,23 @@ function parseSpecs(input) {
     .filter((spec) => spec.label);
 }
 
+function requireLogin(req, res, next) {
+  if (req.session && req.session.user) {
+    return next();
+  }
+
+  const nextUrl = encodeURIComponent(req.originalUrl || "/");
+  return res.redirect(`/login?next=${nextUrl}`);
+}
+
+function requireAdmin(req, res, next) {
+  if (req.session && req.session.user && req.session.user.role === "admin") {
+    return next();
+  }
+
+  return res.redirect("/admin-login");
+}
+
 function buildProductFromForm(body) {
   const now = new Date();
   const images = parseList(body.imageUrls);
@@ -220,7 +250,63 @@ app.get('/about', (req, res) => {
   res.render('about', { acct: account });
 });
 
-app.get('/wallet', (req, res) => {
+app.get('/login', (req, res) => {
+  res.render('login', { acct: account, next: req.query.next || "" });
+});
+
+app.get('/admin-login', (req, res) => {
+  res.render('admin-login', { acct: account });
+});
+
+app.post('/login', (req, res) => {
+  const { email, password, role, next: nextPath } = req.body;
+
+  if (!email || !password) {
+    return res.redirect('/login');
+  }
+
+  if (role === "admin") {
+    const isAdmin = email === "main@gmail.com" && password === "123456";
+    if (!isAdmin) {
+      return res.redirect('/login');
+    }
+  }
+
+  req.session.user = {
+    email,
+    role: role === "admin" ? "admin" : "user"
+  };
+
+  const redirectTo = typeof nextPath === "string" && nextPath ? nextPath : "/wallet";
+  return res.redirect(redirectTo);
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/');
+  });
+});
+
+app.get('/register', (req, res) => {
+  res.render('register', { acct: account });
+});
+
+app.post('/register', (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.redirect('/register');
+  }
+
+  req.session.user = {
+    email,
+    role: "user"
+  };
+
+  return res.redirect('/wallet');
+});
+
+app.get('/wallet', requireLogin, (req, res) => {
   const wallet = {
     totalBalance: "5000.00",
     symbol: "ETHR",
@@ -262,6 +348,14 @@ app.get('/wallet', (req, res) => {
   };
 
   res.render('wallet', { acct: account, wallet });
+});
+
+app.get('/admin', requireAdmin, (req, res) => {
+  res.render('admin-dashboard', { acct: account });
+});
+
+app.get('/documents', requireLogin, (req, res) => {
+  res.render('documents', { acct: account });
 });
 
 // Add product page
@@ -317,7 +411,8 @@ app.get('/product/:id', (req, res) => {
     product,
     reviews: mockReviews,
     ratingCounts,
-    ratingDistribution
+    ratingDistribution,
+    returnTo: req.originalUrl
   });
 });
 

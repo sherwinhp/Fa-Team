@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Register | Blockchain Track</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+      :root {
+        --ink: #111827;
+        --muted: #6b7280;
+        --panel: #ffffff;
+        --soft: #f3f4f6;
+        --border: #e5e7eb;
+        --brand: #2f5bf0;
+        --brand-dark: #1e40af;
+        --dark: #0b0d18;
+        --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+        --radius-lg: 18px;
+        --radius-md: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+        color: var(--ink);
+        background: #f3f7ff;
+        min-height: 100vh;
+      }
+
+      .page {
+        min-height: calc(100vh - 70px);
+        display: grid;
+        place-items: center;
+        padding: 40px 20px 60px;
+      }
+
+      .auth-shell {
+        width: min(460px, 100%);
+        text-align: center;
+      }
+
+      .brand-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--brand);
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 15px;
+        box-shadow: 0 12px 24px rgba(47, 91, 240, 0.25);
+      }
+
+      .brand-badge svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .tab-switch {
+        margin: 20px auto 14px;
+        background: #ececef;
+        padding: 5px;
+        border-radius: 999px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+
+      .tab-switch a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .tab-switch a.active {
+        background: #fff;
+        box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      }
+
+      .card {
+        background: var(--panel);
+        border-radius: var(--radius-lg);
+        padding: 22px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        text-align: left;
+      }
+
+      .card-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .card-title span {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        align-items: center;
+        justify-content: center;
+        background: #f1f5ff;
+        color: var(--brand);
+        font-weight: 700;
+      }
+
+      .card-subtitle {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .form-group {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+
+      label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 13px;
+        outline: none;
+      }
+
+      .btn {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-weight: 600;
+        font-size: 14px;
+        color: #fff;
+        background: #0c0c18;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .footnote {
+        margin-top: 18px;
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <%- include('partials/navbar', { acct }) %>
+
+    <main class="page">
+      <div class="auth-shell">
+        <div class="brand-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M12 2l8 4.5v11L12 22l-8-4.5v-11L12 2z" />
+            <path d="M12 2v8.5m0 0L4 6.5m8 4L20 6.5M12 10.5l8 4.5M12 10.5L4 15" />
+          </svg>
+          BlockChain Track
+        </div>
+
+        <div class="tab-switch">
+          <a href="/login">Login</a>
+          <a class="active" href="/register">Register</a>
+        </div>
+
+        <form class="card" action="/register" method="post">
+          <h2 class="card-title">
+            <span>+</span>
+            Create New Account
+          </h2>
+          <p class="card-subtitle">Register to start shopping on our blockchain marketplace</p>
+
+          <div class="form-group">
+            <label for="register-name">Full Name</label>
+            <input id="register-name" name="fullName" type="text" placeholder="John Doe" required />
+          </div>
+
+          <div class="form-group">
+            <label for="register-email">Email</label>
+            <input id="register-email" name="email" type="email" placeholder="your@email.com" required />
+          </div>
+
+          <div class="form-group">
+            <label for="register-password">Password</label>
+            <input id="register-password" name="password" type="password" placeholder="••••••••" required />
+          </div>
+
+          <div class="form-group">
+            <label for="register-confirm">Confirm Password</label>
+            <input id="register-confirm" name="confirmPassword" type="password" placeholder="••••••••" required />
+          </div>
+
+          <button class="btn" type="submit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+            Create Account
+          </button>
+        </form>
+
+        <div class="footnote">
+          By continuing, you agree to our Terms of Service and Privacy Policy
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documents | Blockchain Track</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+      :root {
+        --ink: #0f172a;
+        --muted: #64748b;
+        --surface: #ffffff;
+        --panel: #f1f5f9;
+        --brand: #2563eb;
+        --shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
+        --radius-lg: 20px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #eef2ff 0%, #ffffff 55%, #f3f7ff 100%);
+        min-height: 100vh;
+      }
+
+      .hero {
+        background: linear-gradient(120deg, #1e40af 0%, #2563eb 60%, #38bdf8 100%);
+        color: #fff;
+        padding: 40px 24px 46px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.25), transparent 70%);
+        top: -160px;
+        right: -120px;
+      }
+
+      .hero-inner {
+        max-width: 1100px;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1;
+        padding: 0 12px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+      }
+
+      .hero p {
+        margin: 0;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 24px 70px;
+      }
+
+      .card {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 22px;
+        box-shadow: var(--shadow);
+        border: 1px solid #e2e8f0;
+      }
+
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <%- include('partials/navbar', { acct }) %>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <h1>Documents</h1>
+        <p>Access your blockchain verification files and shipment records.</p>
+      </div>
+    </section>
+
+    <main class="page">
+      <section class="card">
+        <h2>Your secure document vault</h2>
+        <p>Upload and manage shipment documents, certificates, and escrow receipts here.</p>
+      </section>
+    </main>
+  </body>
+</html>

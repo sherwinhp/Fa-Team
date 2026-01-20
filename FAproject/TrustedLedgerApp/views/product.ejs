@@ -256,6 +256,20 @@
         margin-bottom: 24px;
       }
 
+      .login-required {
+        grid-column: 1 / -1;
+        border: 1px dashed var(--gray-200);
+        border-radius: 10px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--gray-600);
+        font-size: 14px;
+        background: var(--gray-50);
+      }
+
       .btn {
         display: inline-flex;
         align-items: center;
@@ -536,6 +550,7 @@
       </div>
 
       <% const images = product.images && product.images.length ? product.images : ['/images/default-product.jpeg']; %>
+      <% const loginHref = '/login?next=' + encodeURIComponent(returnTo || '/'); %>
 
       <section class="product-grid">
         <div class="gallery">
@@ -607,10 +622,17 @@
           </div>
 
           <div class="actions">
-            <button class="btn" type="button">Add to Cart</button>
-            <button class="btn primary" type="button">Buy Now</button>
-            <button class="btn" type="button">Pay with QR</button>
-            <button class="btn" type="button">Track Order</button>
+            <% if (isLoggedIn) { %>
+              <button class="btn" type="button">Add to Cart</button>
+              <button class="btn primary" type="button">Buy Now</button>
+              <button class="btn" type="button">Pay with QR</button>
+              <button class="btn" type="button">Track Order</button>
+            <% } else { %>
+              <div class="login-required">
+                <span>Log in to purchase, pay, or track orders.</span>
+                <a class="btn primary" href="<%= loginHref %>">Log In to Buy</a>
+              </div>
+            <% } %>
           </div>
         </div>
       </section>

@@ -23,7 +23,7 @@ contract WalletContract {
         uint256 amount;
         uint256 timestamp;
         TxType txType;
-        bytes32 reference;
+        bytes32 txReference;
     }
 
     struct Escrow {
@@ -165,7 +165,7 @@ contract WalletContract {
         address to,
         uint256 amount,
         TxType txType,
-        bytes32 reference
+        bytes32 txReference
     ) internal {
         transactions.push(
             Transaction({
@@ -174,7 +174,7 @@ contract WalletContract {
                 amount: amount,
                 timestamp: block.timestamp,
                 txType: txType,
-                reference: reference
+                txReference: txReference
             })
         );
 
