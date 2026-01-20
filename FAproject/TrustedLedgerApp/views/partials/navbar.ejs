@@ -1,0 +1,177 @@
+<!-- NAVBAR -->
+<style>
+/* =========================
+   TOP NAVBAR (INLINE)
+========================= */
+
+.top-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Logo */
+.brand-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.cube {
+  font-size: 16px;
+}
+
+/* Nav Menu */
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-link.active {
+  font-weight: 600;
+  color: #111827;
+}
+
+.icon {
+  font-size: 14px;
+}
+
+/* Blockchain Secured Badge */
+.nav-secure {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #059669;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.secure-icon {
+  font-size: 14px;
+}
+
+/* =========================
+   HERO SECTION (BLUE)
+========================= */
+
+.hero {
+  background: linear-gradient(90deg, #1d4ed8, #1e40af);
+  color: #ffffff;
+  padding: 60px 24px;
+}
+
+.hero-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero-subtitle {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+.hero-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.hero-desc {
+  font-size: 16px;
+  opacity: 0.95;
+  margin-bottom: 24px;
+  max-width: 600px;
+}
+
+/* Search */
+.hero-search {
+  display: flex;
+  gap: 12px;
+  max-width: 600px;
+}
+
+.hero-search input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+}
+
+.hero-search button {
+  background: #ffffff;
+  color: #1e40af;
+  border: none;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+</style>
+
+<!-- NAVBAR -->
+<header class="top-nav">
+  <div class="nav-container">
+
+    <!-- Left: Logo -->
+    <div class="brand">
+      <div class="brand-pill">
+        <span class="cube">⬡</span>
+        <span class="brand-text">BlockChain Track</span>
+      </div>
+    </div>
+
+    <!-- Right: Nav Items -->
+    <nav class="nav-menu">
+      <a href="/" class="nav-link active">Marketplace</a>
+
+      <a href="#" class="nav-link">
+        <span class="icon">👛</span> Wallet
+      </a>
+
+      <a href="#" class="nav-link">
+        <span class="icon">📄</span> Documents
+      </a>
+
+      <a href="#" class="nav-link">About Us</a>
+
+      <div class="nav-secure">
+        <span class="secure-icon">🛡</span>
+        Blockchain Secured
+      </div>
+    </nav>
+
+  </div>
+</header>
+
+

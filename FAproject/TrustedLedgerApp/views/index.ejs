@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Blockchain Marketplace</title>
+</head>
+<body>
+
+<%- include('partials/navbar', { acct }) %>
+
+<section class="hero">
+  <h1>Blockchain-Secured Marketplace</h1>
+  <p>Every product is transparently tracked on blockchain</p>
+  <input class="search" placeholder="Search products..." />
+</section>
+
+<section class="products">
+
+  <div class="products-header">
+    <h2>Featured Products</h2>
+
+    <a href="/addProduct" class="primary-btn">
+      ➕ Add Product
+    </a>
+  </div>
+
+  <% if (status) { %>
+    <p class="loading">🔄 Loading blockchain data...</p>
+  <% } %>
+
+  <div class="grid">
+    <% products.forEach(item => { %>
+      <div class="card">
+        <img src="/images/default-product.jpeg">
+
+        <div class="card-body">
+          <span class="badge">
+            <%= item.productInfo.category || "Verified" %>
+          </span>
+
+          <h3><%= item.productInfo.name %></h3>
+          
+          <p><%= item.productInfo.description %></p>
+
+          <div class="price">
+            $<%= item.productInfo.price %>
+          </div>
+
+          <a class="btn" href="/product/<%= item.id %>">
+            View Details
+          </a>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+</section>
+
+<% if (addStatus) { %>
+<script>
+  console.log("Blockchain Function:", "<%= addFunction %>");
+  console.log("Payload:", <%- addObject %>);
+</script>
+<% } %>
+
+</body>
+</html>
