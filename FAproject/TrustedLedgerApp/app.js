@@ -1,18 +1,7 @@
 const express = require('express');
 const {Web3} = require('web3');
 const fs = require("fs");
-const multer = require('multer');
 
-// Set up multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-      cb(null, 'public/images'); // Directory to save uploaded files
-  },
-  filename: (req, file, cb) => {
-      cb(null, file.originalname); 
-  }
-});
-const upload = multer({ storage: storage });
 //Set up view engine from ejs library
 const app = express();
 //Set up view engine
@@ -29,29 +18,22 @@ app.use(express.urlencoded({
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 // declare the global variables
-var account = '';
-var shipmentCount = 0;
-var loading = true;  
-var addObj = null;
-var addFunc = null;
-var addEnabled = null;
-var listOfShipments = [];
-var web3Instance = null;
-var contractInstance = null;   
+let account = '';
+let shipmentCount = 0;
+let loading = true;  
+let web3Instance = null;
+let contractInstance = null;   
  
 // Define routes - home page
 app.get('/', async(req, res) => {   
     console.log("Shipping Tracker Home Page");
     try {
       res.render('index', {
-            acct: account,
-            cnt: shipmentCount,
-            shipments: listOfShipments,
-            products: [],
-            status: loading,
-            addObject : JSON.stringify(addObj),
-            addFunction : addFunc,
-            addStatus : addEnabled
+        acct: account,
+        cnt: shipmentCount,
+        shipments: [],
+        products: [],
+        status: loading
       });
     } catch (error) {
         console.error('Error in home route:', error);
@@ -61,18 +43,6 @@ app.get('/', async(req, res) => {
 
 app.get('/about', (req, res) => {
   res.render('about', { acct: account });
-});
-
-// Add product page
-app.get('/addproduct', (req, res) => {
-  res.render('addProduct', {
-    acct: account,
-    products: [],
-    status: loading,
-    addObject : JSON.stringify(addObj),
-    addFunction : addFunc,
-    addStatus : addEnabled
-  });
 });
 
 // Shipping tracker page 
@@ -463,3 +433,5 @@ app.post('/confirmDelivery/:trackingId', express.json(), async (req, res) => {
     });
   }
 });
+
+
