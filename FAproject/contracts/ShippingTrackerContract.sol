@@ -24,6 +24,7 @@ contract ShippingTrackerContract {
 
     string private welcomeMessage = "Welcome to Blockchain Shipping Tracker"; 
     address public admin;
+    address public seller;
     uint256 shipmentCount;
     uint256 escrowBalance;
 
@@ -32,6 +33,7 @@ contract ShippingTrackerContract {
 
     constructor() {
         admin = msg.sender;
+        seller = 0x46EB73Cb66991C07622b3aB77a6E9A93139EE661;
         shipmentCount = 0;
         escrowBalance = 0;
     }
@@ -89,7 +91,6 @@ contract ShippingTrackerContract {
     // Create a new shipment and hold payment in escrow
     function createShipment(
         string memory _trackingId,
-        address _buyer,
         string memory _senderName,
         string memory _senderAddress,
         string memory _recipientName,
@@ -98,7 +99,8 @@ contract ShippingTrackerContract {
         uint256 _shipmentValue
     ) public payable returns (bool) {
         require(msg.value == _shipmentValue, "Payment amount does not match shipment value");
-        require(_buyer != address(0), "Invalid buyer address");
+        require(msg.sender != address(0), "Invalid buyer address");
+        require(seller != address(0), "Seller not configured");
         require(bytes(_trackingId).length > 0, "Tracking ID cannot be empty");
         
         // Check if tracking ID already exists
@@ -107,8 +109,8 @@ contract ShippingTrackerContract {
         // Create shipment
         ShipmentData memory newShipment = ShipmentData(
             _trackingId,
+            seller,
             msg.sender,
-            _buyer,
             _senderName,
             _senderAddress,
             _recipientName,
@@ -131,8 +133,8 @@ contract ShippingTrackerContract {
             "Shipment created and awaiting pickup"
         ));
         
-        sellerShipments[msg.sender].push(_trackingId);
-        buyerShipments[_buyer].push(_trackingId);
+        sellerShipments[seller].push(_trackingId);
+        buyerShipments[msg.sender].push(_trackingId);
         
         escrowBalance += _shipmentValue;
         shipmentCount++;

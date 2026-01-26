@@ -68,6 +68,18 @@
   gap: 6px;
 }
 
+.nav-connect {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+
 .nav-link.active {
   font-weight: 600;
   color: #111827;
@@ -170,10 +182,15 @@
     <!-- Right: Nav Items -->
     <nav class="nav-menu">
       <a href="/" class="nav-link active">Marketplace</a>
+      <a href="/products" class="nav-link">Products</a>
 
       <% if (isLoggedIn) { %>
       <a href="/wallet" class="nav-link">
         <span class="icon">👛</span> Wallet
+      </a>
+
+      <a href="/cart" class="nav-link">
+        <span class="icon">🛒</span> Cart
       </a>
 
       <a href="/documents" class="nav-link">
@@ -195,6 +212,19 @@
         <a href="/login" class="nav-link">Login</a>
       <% } %>
 
+      <% if (isLoggedIn) { %>
+        <button
+          class="nav-connect"
+          id="connectWalletButton"
+          type="button"
+          data-allowed='<%- JSON.stringify(ganacheAccounts || []) %>'
+          data-chainids='<%- JSON.stringify(ganacheChainIds || []) %>'
+          data-provider="<%= ganacheProviderUrl || '' %>"
+        >
+          Connect MetaMask
+        </button>
+      <% } %>
+
       <div class="nav-secure">
         <span class="secure-icon">🛡</span>
         Blockchain Secured
@@ -203,5 +233,241 @@
 
   </div>
 </header>
+
+<script>
+  (() => {
+    const connectButton = document.getElementById("connectWalletButton");
+    const statusEl = document.getElementById("walletStatus");
+    let isConnected = false;
+    let currentAccount = "";
+    let manualDisconnect = false;
+
+    if (!connectButton) {
+      return;
+    }
+
+    const safeParse = (value, fallback) => {
+      if (!value) {
+        return fallback;
+      }
+      try {
+        return JSON.parse(value);
+      } catch (err) {
+        return fallback;
+      }
+    };
+
+    const allowedAccounts = safeParse(connectButton.dataset.allowed, [])
+      .map((item) => String(item || "").toLowerCase())
+      .filter(Boolean);
+    const allowedChainIds = safeParse(connectButton.dataset.chainids, [])
+      .map((item) => String(item || "").toLowerCase())
+      .filter(Boolean);
+    const providerUrl = connectButton.dataset.provider || "";
+
+    const toHexChainId = (value) => {
+      if (!value) {
+        return "";
+      }
+      if (value.startsWith("0x")) {
+        return value.toLowerCase();
+      }
+      const numeric = Number.parseInt(value, 10);
+      if (Number.isNaN(numeric)) {
+        return "";
+      }
+      return `0x${numeric.toString(16)}`;
+    };
+
+    const allowedChainHex = allowedChainIds
+      .map((value) => toHexChainId(value))
+      .filter(Boolean);
+
+    const shortAddress = (address) => {
+      if (!address || address.length < 10) {
+        return address || "";
+      }
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    };
+
+    const emitStatus = (connected, account, message) => {
+      if (connected) {
+        window.dispatchEvent(new CustomEvent("wallet:connected", { detail: { account } }));
+      } else {
+        window.dispatchEvent(new CustomEvent("wallet:disconnected", { detail: { message } }));
+      }
+    };
+
+    const updateButton = (connected) => {
+      connectButton.textContent = connected ? "Disconnect MetaMask" : "Connect MetaMask";
+    };
+
+    const setStatus = (message, connected, account) => {
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.dataset.connected = connected ? "true" : "false";
+      }
+      isConnected = connected;
+      updateButton(connected);
+      emitStatus(connected, account, message);
+    };
+
+    const validateConnection = async (account) => {
+      if (!window.ethereum) {
+        return { ok: false, message: "MetaMask not detected" };
+      }
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (allowedChainHex.length && !allowedChainHex.includes(String(chainId).toLowerCase())) {
+        return { ok: false, message: "Wrong network (use Ganache)" };
+      }
+      if (allowedAccounts.length && !allowedAccounts.includes(account.toLowerCase())) {
+        return { ok: false, message: "Wrong account (match Ganache)" };
+      }
+      return { ok: true, chainId };
+    };
+
+    const refreshStatus = async () => {
+      if (!window.ethereum) {
+        setStatus("MetaMask not detected", false);
+        return;
+      }
+      if (manualDisconnect) {
+        setStatus("Not connected", false);
+        return;
+      }
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        const active = accounts && accounts[0] ? accounts[0] : "";
+        if (!active) {
+          currentAccount = "";
+          setStatus("Not connected", false);
+          return;
+        }
+        const validation = await validateConnection(active);
+        if (!validation.ok) {
+          currentAccount = "";
+          setStatus(validation.message, false);
+          return;
+        }
+        currentAccount = active;
+        setStatus(`${shortAddress(active)}`, true, active);
+      } catch (err) {
+        currentAccount = "";
+        setStatus("Not connected", false);
+      }
+    };
+
+    updateButton(false);
+    refreshStatus();
+
+    const connectWallet = async () => {
+      if (!window.ethereum) {
+        setStatus("MetaMask not detected", false);
+        return null;
+      }
+
+      try {
+        manualDisconnect = false;
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const account = (accounts && accounts[0]) ? accounts[0] : "";
+
+        if (!account) {
+          setStatus("No account selected", false);
+          return null;
+        }
+
+        const validation = await validateConnection(account);
+        if (!validation.ok) {
+          setStatus(validation.message, false);
+          return null;
+        }
+
+        currentAccount = account;
+        setStatus(`${shortAddress(account)}`, true, account);
+
+        try {
+          const contractResponse = await fetch("/build/ShippingTrackerContract.json");
+          if (!contractResponse.ok) {
+            return;
+          }
+          const contractInfo = await contractResponse.json();
+          const chainDecimal = Number.parseInt(validation.chainId, 16);
+          const networks = contractInfo && contractInfo.networks ? contractInfo.networks : {};
+          const networkInfo = networks[chainDecimal] || networks[String(chainDecimal)];
+          const contractAddress = networkInfo && networkInfo.address ? networkInfo.address : "";
+
+          if (!contractAddress) {
+            return;
+          }
+
+          await fetch("/web3Connect", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contractAddress: contractAddress,
+              acct: account,
+              providerUrl: providerUrl || undefined
+            })
+          });
+        } catch (err) {
+          console.error("MetaMask connect error:", err);
+        }
+        return { account, chainId: validation.chainId };
+      } catch (err) {
+        setStatus("Connection canceled", false);
+        return null;
+      }
+    };
+
+    const disconnectWallet = async () => {
+      manualDisconnect = true;
+      currentAccount = "";
+      if (window.ethereum && window.ethereum.request) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_revokePermissions",
+            params: [{ eth_accounts: {} }]
+          });
+        } catch (err) {
+          // MetaMask may not support revoke; keep UI disconnected.
+        }
+      }
+      setStatus("Not connected", false);
+      return true;
+    };
+
+    window.appWallet = {
+      connect: connectWallet,
+      disconnect: disconnectWallet,
+      isConnected: () => isConnected,
+      getAccount: () => currentAccount
+    };
+
+    connectButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (isConnected) {
+        disconnectWallet();
+        return;
+      }
+      connectWallet();
+    });
+
+    if (window.ethereum && window.ethereum.on) {
+      window.ethereum.on("accountsChanged", () => refreshStatus());
+      window.ethereum.on("chainChanged", () => refreshStatus());
+    }
+  })();
+</script>
+
+
+
+
+
+
+
+
+
 
 

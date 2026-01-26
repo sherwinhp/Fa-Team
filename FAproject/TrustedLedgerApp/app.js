@@ -22,6 +22,7 @@ app.use(session({
   saveUninitialized: false
 }));
 
+<<<<<<< Updated upstream
 const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8545';
 const ETH_USD_RATE = Number(process.env.ETH_USD_RATE) || 1850;
 const WALLET_TOKEN_SYMBOL = process.env.WALLET_TOKEN_SYMBOL || 'ETHR';
@@ -29,11 +30,26 @@ const WALLET_TOKEN_NAME = process.env.WALLET_TOKEN_NAME || 'Ethereum';
 const WALLET_TOKEN_STANDARD = process.env.WALLET_TOKEN_STANDARD || 'ERC-20 Standard Token';
 const WALLET_CONTRACT_ADDRESS = process.env.WALLET_CONTRACT_ADDRESS || '';
 const WALLET_TOTAL_SUPPLY = process.env.WALLET_TOTAL_SUPPLY || '1,000,000 ETHR';
+=======
+const ganacheAccounts = (process.env.GANACHE_ACCOUNTS || process.env.GANACHE_ACCOUNT || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const ganacheChainIds = (process.env.GANACHE_CHAIN_IDS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const ganacheProviderUrl = process.env.GANACHE_PROVIDER_URL || "http://127.0.0.1:7545";
+>>>>>>> Stashed changes
 
 app.use((req, res, next) => {
   res.locals.isLoggedIn = Boolean(req.session && req.session.user);
   res.locals.userRole = req.session && req.session.user ? req.session.user.role : null;
   res.locals.userEmail = req.session && req.session.user ? req.session.user.email : null;
+  res.locals.ganacheAccounts = ganacheAccounts;
+  res.locals.ganacheChainIds = ganacheChainIds;
+  res.locals.ganacheProviderUrl = ganacheProviderUrl;
+  res.locals.sellerAddress = sellerAddress;
   next();
 });
 
@@ -43,6 +59,7 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 // declare the global variables
 let account = '';
 let shipmentCount = 0;
+<<<<<<< Updated upstream
 let loading = true;
 let web3Instance = new Web3(WEB3_PROVIDER_URL);
 let contractInstance = null;
@@ -55,6 +72,12 @@ try {
 } catch (error) {
   console.warn("Wallet contract ABI not available:", error.message || error);
 }
+=======
+let loading = true;  
+let web3Instance = null;
+let contractInstance = null;   
+const sellerAddress = "0x46EB73Cb66991C07622b3aB77a6E9A93139EE661";
+>>>>>>> Stashed changes
 
 const mockProducts = [
   {
@@ -178,6 +201,52 @@ function parseSpecs(input) {
       };
     })
     .filter((spec) => spec.label);
+}
+
+async function componentWillMount() {
+  try {
+    await loadWeb3();
+    await loadBlockchainData();
+  } catch (error) {
+    console.error('Error in componentWillMount:', error);
+  }
+}
+
+async function loadWeb3() {
+  if (!web3Instance) {
+    web3Instance = new Web3(ganacheProviderUrl);
+  }
+}
+
+async function loadBlockchainData() {
+  try {
+    loading = true;
+    await loadWeb3();
+    const web3 = web3Instance;
+
+    const contractJSON = JSON.parse(
+      fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')
+    );
+    const networkId = await web3.eth.net.getId();
+    const networkData = contractJSON.networks ? contractJSON.networks[networkId] : null;
+
+    if (!networkData || !networkData.address) {
+      throw new Error('ShippingTrackerContract not deployed to detected network');
+    }
+
+    contractInstance = new web3.eth.Contract(contractJSON.abi, networkData.address);
+    const count = await contractInstance.methods.getShipmentCount().call();
+    shipmentCount = parseInt(count);
+    return {
+      contractInstance,
+      shipmentCount
+    };
+  } catch (error) {
+    console.error('Error loading blockchain data:', error);
+    throw error;
+  } finally {
+    loading = false;
+  }
 }
 
 function requireLogin(req, res, next) {
@@ -339,21 +408,32 @@ async function buildWalletSnapshot() {
 // Define routes - home page
 app.get('/', async(req, res) => {   
     console.log("Shipping Tracker Home Page");
+    await componentWillMount();
     try {
+      const featuredProducts = products.slice(0, 4);
       res.render('index', {
         acct: account,
         cnt: shipmentCount,
         shipments: [],
-        products: products,
+        products: featuredProducts,
         status: loading,
         addObject: null,
         addFunction: null,
-        addStatus: false
+        addStatus: false,
+        featuredProducts: featuredProducts
       });
     } catch (error) {
         console.error('Error in home route:', error);
         res.status(500).send('Server error');
     }
+});
+
+app.get('/products', (req, res) => {
+  res.render('products', {
+    acct: account,
+    products: products,
+    status: loading
+  });
 });
 
 app.get('/about', (req, res) => {
@@ -416,6 +496,7 @@ app.post('/register', (req, res) => {
   return res.redirect('/wallet');
 });
 
+<<<<<<< Updated upstream
 app.get('/wallet', requireLogin, async (req, res) => {
   try {
     const wallet = await buildWalletSnapshot();
@@ -424,6 +505,14 @@ app.get('/wallet', requireLogin, async (req, res) => {
     console.error('Error rendering wallet:', error);
     return res.status(500).send('Unable to load wallet data');
   }
+=======
+app.get('/wallet', requireLogin, (req, res) => {
+  const wallet = {
+    transactions: []
+  };
+
+  res.render('wallet', { acct: account, wallet });
+>>>>>>> Stashed changes
 });
 
 app.get('/admin', requireAdmin, (req, res) => {
@@ -435,7 +524,7 @@ app.get('/documents', requireLogin, (req, res) => {
 });
 
 // Add product page
-app.get('/addproduct', (req, res) => {
+app.get('/addproduct', requireAdmin, (req, res) => {
   res.render('addProduct', {
     acct: account,
     products: products,
@@ -448,7 +537,7 @@ app.get('/addproduct', (req, res) => {
   });
 });
 
-app.post('/addproduct', (req, res) => {
+app.post('/addproduct', requireAdmin, (req, res) => {
   const { name, description, price } = req.body;
 
   if (!name || !description || !price) {
@@ -493,8 +582,63 @@ app.get('/product/:id', (req, res) => {
 });
 
 // Shipping tracker page 
-app.get("/shipping/tracker", (req, res) => {
-  res.render("tracking");
+app.get("/shipping/tracker", requireLogin, (req, res) => {
+  res.render("tracking", { acct: account });
+});
+
+function getCart(req) {
+  if (!req.session.cart) {
+    req.session.cart = { items: {} };
+  }
+  return req.session.cart;
+}
+
+app.post('/cart/add', requireLogin, (req, res) => {
+  const { productId, quantity } = req.body;
+  const product = products.find((item) => item.id === productId);
+  if (!product) {
+    return res.status(404).send('Product not found');
+  }
+
+  const qty = Math.max(1, Number.parseInt(quantity || '1', 10));
+  const cart = getCart(req);
+  cart.items[productId] = (cart.items[productId] || 0) + qty;
+  req.session.cart = cart;
+  return res.redirect('/cart');
+});
+
+app.get('/cart', requireLogin, (req, res) => {
+  const cart = getCart(req);
+  const cartItems = Object.keys(cart.items).map((id) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) {
+      return null;
+    }
+    return {
+      product,
+      quantity: cart.items[id]
+    };
+  }).filter(Boolean);
+
+  res.render('cart', {
+    acct: account,
+    cartItems: cartItems
+  });
+});
+
+app.post('/cart/remove', requireLogin, (req, res) => {
+  const { productId } = req.body;
+  const cart = getCart(req);
+  if (productId && cart.items[productId]) {
+    delete cart.items[productId];
+  }
+  req.session.cart = cart;
+  return res.redirect('/cart');
+});
+
+app.post('/cart/clear', requireLogin, (req, res) => {
+  req.session.cart = { items: {} };
+  return res.redirect('/cart');
 });
 
 // Initialize Web3 connection and contract
@@ -612,7 +756,6 @@ app.post('/createShipment', express.json(), async (req, res) => {
   try {
     const {
       trackingId,
-      buyerAddress,
       senderName,
       senderAddress,
       recipientName,
@@ -629,18 +772,10 @@ app.post('/createShipment', express.json(), async (req, res) => {
     }
     
     // Validate inputs
-    if (!trackingId || !buyerAddress || !shipmentValue) {
+    if (!trackingId || !shipmentValue) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: trackingId, buyerAddress, shipmentValue'
-      });
-    }
-    
-    // Validate Ethereum addresses
-    if (!buyerAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid buyer address format'
+        message: 'Missing required fields: trackingId, shipmentValue'
       });
     }
     
@@ -655,7 +790,6 @@ app.post('/createShipment', express.json(), async (req, res) => {
     // Call smart contract method
     const tx = contractInstance.methods.createShipment(
       trackingId,
-      buyerAddress,
       senderName,
       senderAddress,
       recipientName,
@@ -685,6 +819,7 @@ app.post('/createShipment', express.json(), async (req, res) => {
       message: 'Shipment creation initiated',
       txData: txData,
       trackingId: trackingId,
+      seller: sellerAddress,
       estimatedGas: gasEstimate.toString(),
       estimatedGasPrice: gasPrice.toString()
     });
@@ -757,6 +892,65 @@ app.get('/track/:trackingId', async (req, res) => {
     }
   } catch (error) {
     console.error('Error tracking shipment:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Shipping tracker UI data
+app.get('/api/shipping/:trackingId', async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+    if (!contractInstance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+
+    if (!account) {
+      return res.status(400).json({
+        success: false,
+        message: 'No MetaMask account connected'
+      });
+    }
+    if (!trackingId || trackingId.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Tracking ID cannot be empty'
+      });
+    }
+
+    const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
+    const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+    const updates = await contractInstance.methods.getShipmentUpdates(trackingId).call();
+
+    const statusLabels = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
+    const lastUpdateIso = new Date(parseInt(status[1], 10) * 1000).toISOString();
+    const events = updates.map((update) => ({
+      title: statusLabels[update.status] || "Status Update",
+      location: update.location,
+      timestamp: new Date(parseInt(update.timestamp, 10) * 1000).toISOString(),
+      notes: update.notes
+    }));
+
+    res.json({
+      smartContractId: contractInstance.options.address,
+      lastVerified: lastUpdateIso,
+      deliveryMethod: "Blockchain Logistics",
+      estimatedDelivery: "3-5 business days",
+      trackingLabel: "Real-time blockchain tracking",
+      shipmentValue: web3Instance.utils.fromWei(shipmentData.shipmentValue, 'ether'),
+      buyer: shipmentData.buyer,
+      seller: shipmentData.seller,
+      currentStatus: statusLabels[status[0]] || "Pending",
+      currentStatusCode: Number(status[0]),
+      events: events
+    });
+  } catch (error) {
+    console.error('Error loading shipping tracker:', error);
     res.status(500).json({
       success: false,
       message: error.message

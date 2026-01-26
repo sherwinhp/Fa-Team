@@ -77,6 +77,28 @@
       align-items:flex-start;
       margin-bottom:18px;
     }
+
+    .status-bar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin: 4px 0 18px;
+    }
+
+    .status-bar .pill{
+      border-color: var(--line);
+    }
+
+    .status-bar .pill.done{
+      background: var(--greenSoft);
+      color: var(--green);
+      border-color: rgba(22,163,74,.3);
+    }
+
+    .status-bar .pill.pending{
+      color: var(--muted);
+      background: #fff;
+    }
     .infoCol{
       display:flex;
       flex-direction:column;
@@ -284,6 +306,7 @@
 </head>
  
 <body>
+  <%- include('partials/navbar', { acct }) %>
   <div class="wrap">
     <div class="grid">
  
@@ -302,6 +325,7 @@
           <span class="pill" id="trackingIdPill">Tracking: —</span>
         </div>
  
+        <div class="status-bar" id="statusBar"></div>
         <div class="timeline" id="timeline"></div>
  
         <div class="notice">
@@ -354,6 +378,14 @@
             <li>Automatic payment release upon successful delivery</li>
           </ol>
         </div>
+
+        <% if (userRole === 'admin') { %>
+          <div class="sectionTitle">Admin Actions</div>
+          <div class="checkList">
+            <button class="pill" id="markDeliveredButton" type="button">Mark Delivered</button>
+            <button class="pill" id="releasePaymentButton" type="button">Release Payment</button>
+          </div>
+        <% } %>
       </section>
  
     </div>
@@ -363,9 +395,21 @@
     // Change this depending on your routing:
     // Example: /tracking.html?trackingId=TRK-123456
     const params = new URLSearchParams(window.location.search);
-    const trackingId = params.get("trackingId") || "TRK-123456";
+    const trackingId = params.get("trackingId") || localStorage.getItem("lastTrackingId") || "TRK-123456";
  
     const el = (id) => document.getElementById(id);
+    const statusBar = document.getElementById("statusBar");
+    const markDeliveredButton = document.getElementById("markDeliveredButton");
+    const releasePaymentButton = document.getElementById("releasePaymentButton");
+
+    const statusSteps = [
+      "Pending",
+      "Picked Up",
+      "In Transit",
+      "Out For Delivery",
+      "Delivered",
+      "Failed"
+    ];
  
     function fmtDate(iso){
       if(!iso) return "Pending";
@@ -408,6 +452,17 @@
         </div>
       `;
     }
+
+    function renderStatusBar(currentStatus){
+      if(!statusBar){
+        return;
+      }
+      const currentIndex = statusSteps.indexOf(currentStatus);
+      statusBar.innerHTML = statusSteps.map((label, index) => {
+        const state = index <= currentIndex ? "done" : "pending";
+        return `<span class="pill ${state}">${label}</span>`;
+      }).join("");
+    }
  
     async function loadTracking(){
       el("trackingIdPill").textContent = `Tracking: ${trackingId}`;
@@ -421,6 +476,7 @@
       }
  
       const data = await res.json();
+      renderStatusBar(data.currentStatus);
  
       el("contractId").textContent = data.smartContractId || "—";
       el("lastVerified").textContent = fmtDate(data.lastVerified);
@@ -432,6 +488,55 @@
     }
  
     loadTracking();
+
+    async function sendTransaction(txData){
+      if(!window.ethereum){
+        alert("MetaMask not detected.");
+        return;
+      }
+      try{
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [txData]
+        });
+      }catch(err){
+        alert("Transaction canceled or failed.");
+      }
+    }
+
+    if(markDeliveredButton){
+      markDeliveredButton.addEventListener("click", async () => {
+        const payload = {
+          status: 4,
+          location: "Recipient address",
+          notes: "Marked delivered by admin"
+        };
+        const res = await fetch(`/updateStatus/${encodeURIComponent(trackingId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if(data && data.txData){
+          await sendTransaction(data.txData);
+          loadTracking();
+        }
+      });
+    }
+
+    if(releasePaymentButton){
+      releasePaymentButton.addEventListener("click", async () => {
+        const res = await fetch(`/confirmDelivery/${encodeURIComponent(trackingId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if(data && data.txData){
+          await sendTransaction(data.txData);
+          loadTracking();
+        }
+      });
+    }
   </script>
 </body>
 </html>

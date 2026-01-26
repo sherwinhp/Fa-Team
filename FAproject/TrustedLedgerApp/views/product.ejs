@@ -256,6 +256,16 @@
         margin-bottom: 24px;
       }
 
+      .action-form {
+        display: contents;
+      }
+
+      .order-status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--gray-600);
+      }
+
       .login-required {
         grid-column: 1 / -1;
         border: 1px dashed var(--gray-200);
@@ -623,10 +633,14 @@
 
           <div class="actions">
             <% if (isLoggedIn) { %>
-              <button class="btn" type="button">Add to Cart</button>
-              <button class="btn primary" type="button">Buy Now</button>
+              <form class="action-form" method="post" action="/cart/add">
+                <input type="hidden" name="productId" value="<%= product.id %>">
+                <input type="hidden" name="quantity" value="1">
+                <button class="btn" type="submit">Add to Cart</button>
+              </form>
+              <button class="btn primary" id="buyNowButton" type="button">Buy Now</button>
               <button class="btn" type="button">Pay with QR</button>
-              <button class="btn" type="button">Track Order</button>
+              <button class="btn" id="trackOrderButton" type="button">Track Order</button>
             <% } else { %>
               <div class="login-required">
                 <span>Log in to purchase, pay, or track orders.</span>
@@ -634,6 +648,9 @@
               </div>
             <% } %>
           </div>
+          <% if (isLoggedIn) { %>
+            <div class="order-status" id="orderStatus">No active order yet.</div>
+          <% } %>
         </div>
       </section>
 
@@ -826,6 +843,111 @@
           });
         });
       });
+
+      const buyNowButton = document.getElementById("buyNowButton");
+      const trackOrderButton = document.getElementById("trackOrderButton");
+      const orderStatus = document.getElementById("orderStatus");
+
+      const updateOrderStatus = async (trackingId) => {
+        if (!orderStatus || !trackingId) {
+          return;
+        }
+        try {
+          const res = await fetch(`/api/shipping/${encodeURIComponent(trackingId)}`);
+          if (!res.ok) {
+            orderStatus.textContent = `Order ${trackingId}: status unavailable.`;
+            return;
+          }
+          const data = await res.json();
+          orderStatus.textContent = `Order ${trackingId}: ${data.currentStatus || "Pending"}.`;
+        } catch (err) {
+          orderStatus.textContent = `Order ${trackingId}: status unavailable.`;
+        }
+      };
+
+      const sendTransaction = async (txData) => {
+        if (!window.ethereum) {
+          alert("MetaMask not detected.");
+          return null;
+        }
+        try {
+          return await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [txData]
+          });
+        } catch (err) {
+          alert("Transaction canceled or failed.");
+          return null;
+        }
+      };
+
+      if (buyNowButton) {
+        buyNowButton.addEventListener("click", async () => {
+          if (window.appWallet && !window.appWallet.isConnected()) {
+            const result = await window.appWallet.connect();
+            if (!result || !result.account) {
+              return;
+            }
+          }
+
+          const recipientName = prompt("Recipient name:");
+          if (!recipientName) {
+            return;
+          }
+          const recipientAddress = prompt("Recipient address:");
+          if (!recipientAddress) {
+            return;
+          }
+
+          const trackingId = `TRK-${Date.now()}`;
+          const payload = {
+            trackingId: trackingId,
+            senderName: "<%= product.seller.name %>",
+            senderAddress: "Seller warehouse",
+            recipientName: recipientName,
+            recipientAddress: recipientAddress,
+            itemDescription: "<%= product.productInfo.name %>",
+            shipmentValue: "<%= product.productInfo.price %>"
+          };
+
+          const res = await fetch("/createShipment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!data || !data.txData) {
+            alert(data && data.message ? data.message : "Unable to create shipment.");
+            return;
+          }
+
+          const txHash = await sendTransaction(data.txData);
+          if (!txHash) {
+            return;
+          }
+
+          localStorage.setItem("lastTrackingId", trackingId);
+          updateOrderStatus(trackingId);
+          window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+        });
+      }
+
+      if (trackOrderButton) {
+        trackOrderButton.addEventListener("click", async () => {
+          const trackingId = localStorage.getItem("lastTrackingId");
+          if (!trackingId) {
+            alert("No tracking ID available yet.");
+            return;
+          }
+          await updateOrderStatus(trackingId);
+          window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+        });
+      }
+
+      const lastTrackingId = localStorage.getItem("lastTrackingId");
+      if (lastTrackingId) {
+        updateOrderStatus(lastTrackingId);
+      }
     </script>
   </body>
 </html>

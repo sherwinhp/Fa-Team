@@ -218,6 +218,28 @@
       color: var(--gray-500);
     }
 
+    .wallet-empty {
+      border: 1px dashed var(--gray-200);
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 16px;
+      color: var(--gray-600);
+      display: grid;
+      gap: 12px;
+    }
+
+    .wallet-note {
+      margin: 0;
+      font-size: 12px;
+      color: var(--red-600);
+    }
+
+    .wallet-live[hidden],
+    .token-info[hidden],
+    .history[hidden] {
+      display: none;
+    }
+
     .wallet-address {
       margin-top: 16px;
     }
@@ -473,6 +495,7 @@
       <div class="card">
         <h3><span class="badge-dot"></span> Wallet Balance</h3>
 
+<<<<<<< Updated upstream
         <div class="balance-summary">
           <div>
             <div class="total-label">Total Balance</div>
@@ -493,53 +516,91 @@
             <span><%= wallet.symbol %> Balance</span>
             <h4 id="eth-balance-value"><%= wallet.ethBalance %></h4>
             <p id="eth-balance-usd"><%= wallet.ethUsd %></p>
-          </div>
-          <div class="mini-card">
-            <span><%= wallet.symbol %> Balance</span>
-            <h4><%= wallet.tokenBalance %></h4>
-            <p><%= wallet.tokenUsd %></p>
-          </div>
+=======
+        <div class="wallet-empty" id="walletEmpty">
+          <div>Connect MetaMask to see your wallet address and balance.</div>
+          <button class="btn btn-primary" id="walletConnectButton" type="button">Connect MetaMask</button>
+          <p class="wallet-note" id="walletError" role="status"></p>
         </div>
 
+        <div class="wallet-live" id="walletLive" hidden>
+          <div class="balance-summary">
+            <div>
+              <div class="total-label">Total Balance</div>
+              <div class="total-value" id="walletTotalBalance">--</div>
+              <div class="total-currency" id="walletSymbol">ETH</div>
+            </div>
+            <div class="balance-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                <circle cx="12" cy="12" r="8"></circle>
+                <path d="M8 12h8"></path>
+                <path d="M12 8v8"></path>
+              </svg>
+            </div>
+>>>>>>> Stashed changes
+          </div>
+
+<<<<<<< Updated upstream
         <div class="wallet-address">
           <label>Wallet Address</label>
           <div class="address-bar">
             <code id="wallet-address"><%= wallet.address %></code>
             <button class="copy-btn" type="button">Copy</button>
+=======
+          <div class="mini-cards">
+            <div class="mini-card">
+              <span>ETH Balance</span>
+              <h4 id="walletEthBalance">--</h4>
+              <p id="walletEthFiat"></p>
+            </div>
+            <div class="mini-card" id="tokenBalanceCard" hidden>
+              <span>Token Balance</span>
+              <h4 id="walletTokenBalance">--</h4>
+              <p id="walletTokenFiat"></p>
+            </div>
+>>>>>>> Stashed changes
           </div>
-        </div>
 
-        <div class="wallet-actions">
-          <button class="btn btn-primary" type="button">Send Tokens</button>
-          <button class="btn btn-outline" type="button">Receive</button>
+          <div class="wallet-address">
+            <label>Wallet Address</label>
+            <div class="address-bar">
+              <code id="walletAddressValue"></code>
+              <button class="copy-btn" id="copyWalletAddress" type="button">Copy</button>
+            </div>
+          </div>
+
+          <div class="wallet-actions">
+            <button class="btn btn-primary" type="button">Send Tokens</button>
+            <button class="btn btn-outline" type="button">Receive</button>
+          </div>
         </div>
       </div>
 
-      <aside class="card token-info">
+      <aside class="card token-info" id="tokenInfo" hidden>
         <h3><span class="badge-dot"></span> Token Info</h3>
         <dl>
           <div>
             <dt>Token Name</dt>
-            <dd><%= wallet.token.name %></dd>
+            <dd id="tokenName">Not available</dd>
           </div>
           <div>
             <dt>Symbol</dt>
-            <dd><%= wallet.token.symbol %></dd>
+            <dd id="tokenSymbol">--</dd>
           </div>
           <div>
             <dt>Contract Address</dt>
-            <dd><%= wallet.token.contractAddress %></dd>
+            <dd id="tokenContract">--</dd>
           </div>
           <div>
             <dt>Total Supply</dt>
-            <dd><%= wallet.token.totalSupply %></dd>
+            <dd id="tokenSupply">--</dd>
           </div>
         </dl>
-        <div class="token-tag"><%= wallet.token.standard %></div>
+        <div class="token-tag" id="tokenStandard">ERC-20</div>
       </aside>
     </section>
 
-    <section class="card history">
+    <section class="card history" id="walletHistory" hidden>
       <h3><span class="badge-dot"></span> Transaction History</h3>
       <div class="tabs" role="tablist">
         <button class="tab active" type="button">All</button>
@@ -547,6 +608,7 @@
         <button class="tab" type="button">Deliveries</button>
       </div>
 
+<<<<<<< Updated upstream
       <% if (wallet.transactions && wallet.transactions.length) { %>
         <% wallet.transactions.forEach((tx) => { %>
           <div class="history-item">
@@ -614,10 +676,169 @@
       const updateAccountData = async (account) => {
         if (!window.ethereum || !account) return;
         try {
+=======
+      <div class="history-item">
+        <div class="history-icon">!</div>
+        <div>
+          <h4>No wallet activity loaded</h4>
+          <p>Connect a wallet to load on-chain transactions.</p>
+        </div>
+        <div class="history-amount">
+          <div>--</div>
+          <div class="status-pill status-pending">waiting</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const connectButton = document.getElementById("walletConnectButton");
+      const walletEmpty = document.getElementById("walletEmpty");
+      let isConnected = false;
+      const walletLive = document.getElementById("walletLive");
+      const walletError = document.getElementById("walletError");
+      const addressEl = document.getElementById("walletAddressValue");
+      const totalBalanceEl = document.getElementById("walletTotalBalance");
+      const symbolEl = document.getElementById("walletSymbol");
+      const ethBalanceEl = document.getElementById("walletEthBalance");
+      const ethFiatEl = document.getElementById("walletEthFiat");
+      const tokenInfo = document.getElementById("tokenInfo");
+      const walletHistory = document.getElementById("walletHistory");
+      const copyButton = document.getElementById("copyWalletAddress");
+      const navStatus = document.getElementById("walletStatus");
+      const navConnectButton = document.getElementById("connectWalletButton");
+      let balanceIntervalId = null;
+
+      const safeParse = (value, fallback) => {
+        if (!value) {
+          return fallback;
+        }
+        try {
+          return JSON.parse(value);
+        } catch (err) {
+          return fallback;
+        }
+      };
+
+      const allowedAccounts = navConnectButton
+        ? safeParse(navConnectButton.dataset.allowed, [])
+          .map((item) => String(item || "").toLowerCase())
+          .filter(Boolean)
+        : [];
+      const allowedChainIds = navConnectButton
+        ? safeParse(navConnectButton.dataset.chainids, [])
+          .map((item) => String(item || "").toLowerCase())
+          .filter(Boolean)
+        : [];
+
+      const toHexChainId = (value) => {
+        if (!value) {
+          return "";
+        }
+        if (value.startsWith("0x")) {
+          return value.toLowerCase();
+        }
+        const numeric = Number.parseInt(value, 10);
+        if (Number.isNaN(numeric)) {
+          return "";
+        }
+        return `0x${numeric.toString(16)}`;
+      };
+
+      const allowedChainHex = allowedChainIds
+        .map((value) => toHexChainId(value))
+        .filter(Boolean);
+
+      const setNavStatus = (message, connected) => {
+        if (!navStatus) {
+          return;
+        }
+        navStatus.textContent = message;
+        navStatus.dataset.connected = connected ? "true" : "false";
+      };
+
+      const setDisconnected = (message) => {
+        if (balanceIntervalId) {
+          clearInterval(balanceIntervalId);
+          balanceIntervalId = null;
+        }
+        isConnected = false;
+        if (connectButton) {
+          connectButton.textContent = "Connect MetaMask";
+        }
+        walletLive.hidden = true;
+        tokenInfo.hidden = true;
+        walletHistory.hidden = true;
+        walletEmpty.hidden = false;
+        addressEl.textContent = "";
+        totalBalanceEl.textContent = "--";
+        ethBalanceEl.textContent = "--";
+        ethFiatEl.textContent = "";
+        if (walletError) {
+          walletError.textContent = message || "";
+        }
+        setNavStatus("Not connected", false);
+      };
+
+      const setConnected = (account, balanceEth) => {
+        isConnected = true;
+        if (connectButton) {
+          connectButton.textContent = "Disconnect MetaMask";
+        }
+        walletEmpty.hidden = true;
+        walletLive.hidden = false;
+        tokenInfo.hidden = true;
+        walletHistory.hidden = false;
+        addressEl.textContent = account;
+        symbolEl.textContent = "ETH";
+        totalBalanceEl.textContent = balanceEth;
+        ethBalanceEl.textContent = balanceEth;
+        ethFiatEl.textContent = "";
+        if (walletError) {
+          walletError.textContent = "";
+        }
+        setNavStatus(`${account.slice(0, 6)}...${account.slice(-4)}`, true);
+      };
+
+      const formatEth = (hexValue) => {
+        if (!hexValue) {
+          return "0.0000";
+        }
+        try {
+          const wei = BigInt(hexValue);
+          const base = 10n ** 18n;
+          const whole = wei / base;
+          const fraction = wei % base;
+          const fractionDigits = (fraction / (10n ** 14n)).toString().padStart(4, "0");
+          return `${whole.toString()}.${fractionDigits}`;
+        } catch (err) {
+          return "0.0000";
+        }
+      };
+
+      const updateBalances = async (account) => {
+        if (!window.ethereum || !account) {
+          setDisconnected("MetaMask not detected.");
+          return;
+        }
+
+        try {
+          const chainId = await window.ethereum.request({ method: "eth_chainId" });
+          if (allowedChainHex.length && !allowedChainHex.includes(String(chainId).toLowerCase())) {
+            setDisconnected("Wrong network (use Ganache).");
+            return;
+          }
+          if (allowedAccounts.length && !allowedAccounts.includes(account.toLowerCase())) {
+            setDisconnected("Wrong account (match Ganache).");
+            return;
+          }
+>>>>>>> Stashed changes
           const balanceHex = await window.ethereum.request({
             method: "eth_getBalance",
             params: [account, "latest"]
           });
+<<<<<<< Updated upstream
           const balanceValue = balanceHex ? Number(BigInt(balanceHex)) / 1e18 : 0;
           const display = balanceValue.toFixed(4);
           if (totalBalanceEl) totalBalanceEl.textContent = display;
@@ -648,17 +869,36 @@
           connectButton.disabled = true;
         }
         await Promise.all([updateAccountData(account), updateNetworkName()]);
+=======
+          const balanceEth = formatEth(balanceHex);
+          setConnected(account, balanceEth);
+        } catch (err) {
+          setDisconnected("Unable to load balance.");
+        }
+      };
+
+      const startLiveBalance = (account) => {
+        if (balanceIntervalId) {
+          clearInterval(balanceIntervalId);
+        }
+        balanceIntervalId = setInterval(() => updateBalances(account), 4000);
+>>>>>>> Stashed changes
       };
 
       const connectWallet = async () => {
         if (!window.ethereum) {
+<<<<<<< Updated upstream
           activateStatus("MetaMask not detected", "error");
           if (connectButton) connectButton.disabled = true;
+=======
+          setDisconnected("MetaMask not detected.");
+>>>>>>> Stashed changes
           return;
         }
 
         try {
           const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+<<<<<<< Updated upstream
           await handleAccounts(accounts);
         } catch (error) {
           const rejected = error?.code === 4001;
@@ -684,10 +924,45 @@
             selection.addRange(range);
             document.execCommand("copy");
             selection.removeAllRanges();
+=======
+          const account = accounts && accounts[0] ? accounts[0] : "";
+          if (!account) {
+            setDisconnected("No account selected.");
+            return;
+          }
+          const chainId = await window.ethereum.request({ method: "eth_chainId" });
+          if (allowedChainHex.length && !allowedChainHex.includes(String(chainId).toLowerCase())) {
+            setDisconnected("Wrong network (use Ganache).");
+            return;
+          }
+          if (allowedAccounts.length && !allowedAccounts.includes(account.toLowerCase())) {
+            setDisconnected("Wrong account (match Ganache).");
+            return;
+          }
+          sessionStorage.setItem("connectedAccount", account);
+          await updateBalances(account);
+          startLiveBalance(account);
+        } catch (err) {
+          setDisconnected("Connection canceled.");
+        }
+      };
+
+      if (copyButton) {
+        copyButton.addEventListener("click", async () => {
+          const address = addressEl.textContent.trim();
+          if (!address) {
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(address);
+          } catch (err) {
+            console.error("Failed to copy address", err);
+>>>>>>> Stashed changes
           }
         });
       }
 
+<<<<<<< Updated upstream
       if (!window.ethereum) {
         activateStatus("MetaMask not installed", "error");
         if (connectButton) connectButton.disabled = true;
@@ -703,6 +978,89 @@
 
       updateNetworkName();
     });
+=======
+      const disconnectWallet = () => {
+        setDisconnected("");
+      };
+
+      if (connectButton) {
+        connectButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (window.appWallet) {
+            if (window.appWallet.isConnected()) {
+              window.appWallet.disconnect();
+            } else {
+              window.appWallet.connect().then((result) => {
+                if (result && result.account) {
+                  updateBalances(result.account);
+                  startLiveBalance(result.account);
+                }
+              });
+            }
+            return;
+          }
+          if (isConnected) {
+            disconnectWallet();
+            return;
+          }
+          connectWallet();
+        });
+      }
+
+      window.addEventListener("wallet:connected", (event) => {
+        const account = event.detail && event.detail.account ? event.detail.account : "";
+        if (!account) {
+          return;
+        }
+        updateBalances(account);
+        startLiveBalance(account);
+      });
+
+      window.addEventListener("wallet:disconnected", (event) => {
+        const message = event.detail && event.detail.message ? event.detail.message : "";
+        setDisconnected(message);
+      });
+
+      const bootstrapWallet = async () => {
+        if (!window.ethereum) {
+          setDisconnected("MetaMask not detected.");
+          return;
+        }
+        try {
+          const accounts = await window.ethereum.request({ method: "eth_accounts" });
+          const account = accounts && accounts[0] ? accounts[0] : "";
+          if (account) {
+            updateBalances(account);
+            startLiveBalance(account);
+          } else {
+            setDisconnected("");
+          }
+        } catch (err) {
+          setDisconnected("");
+        }
+      };
+
+      bootstrapWallet();
+
+      if (window.ethereum && window.ethereum.on) {
+        window.ethereum.on("accountsChanged", (accounts) => {
+          const account = accounts && accounts[0] ? accounts[0] : "";
+          if (account) {
+            updateBalances(account);
+            startLiveBalance(account);
+          } else {
+            setDisconnected("");
+          }
+        });
+
+        window.ethereum.on("chainChanged", () => {
+          bootstrapWallet();
+        });
+      }
+    })();
+>>>>>>> Stashed changes
   </script>
 </body>
 </html>
+
+

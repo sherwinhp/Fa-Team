@@ -231,7 +231,10 @@
       <p>Every product is transparently tracked on blockchain with verifiable provenance.</p>
       <div class="hero-actions">
         <input class="search" placeholder="Search products..." />
-        <a href="/addproduct" class="primary-btn">Add Product</a>
+        <a href="/products" class="primary-btn">View All Products</a>
+        <% if (userRole === 'admin') { %>
+          <a href="/addproduct" class="primary-btn">Add Product</a>
+        <% } %>
       </div>
     </section>
 
