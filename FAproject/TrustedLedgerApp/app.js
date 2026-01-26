@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const path = require('path');
 const {Web3} = require('web3');
 const fs = require("fs");
 
@@ -20,6 +22,14 @@ app.use(session({
   saveUninitialized: false
 }));
 
+const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8545';
+const ETH_USD_RATE = Number(process.env.ETH_USD_RATE) || 1850;
+const WALLET_TOKEN_SYMBOL = process.env.WALLET_TOKEN_SYMBOL || 'ETHR';
+const WALLET_TOKEN_NAME = process.env.WALLET_TOKEN_NAME || 'Ethereum';
+const WALLET_TOKEN_STANDARD = process.env.WALLET_TOKEN_STANDARD || 'ERC-20 Standard Token';
+const WALLET_CONTRACT_ADDRESS = process.env.WALLET_CONTRACT_ADDRESS || '';
+const WALLET_TOTAL_SUPPLY = process.env.WALLET_TOTAL_SUPPLY || '1,000,000 ETHR';
+
 app.use((req, res, next) => {
   res.locals.isLoggedIn = Boolean(req.session && req.session.user);
   res.locals.userRole = req.session && req.session.user ? req.session.user.role : null;
@@ -33,9 +43,18 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 // declare the global variables
 let account = '';
 let shipmentCount = 0;
-let loading = true;  
-let web3Instance = null;
-let contractInstance = null;   
+let loading = true;
+let web3Instance = new Web3(WEB3_PROVIDER_URL);
+let contractInstance = null;
+let walletContractInstance = null;
+
+const walletArtifactPath = path.join(__dirname, 'public', 'build', 'WalletContract.json');
+let walletContractAbi = null;
+try {
+  walletContractAbi = JSON.parse(fs.readFileSync(walletArtifactPath, 'utf8')).abi;
+} catch (error) {
+  console.warn("Wallet contract ABI not available:", error.message || error);
+}
 
 const mockProducts = [
   {
@@ -225,6 +244,97 @@ function buildProductFromForm(body) {
     reviewCount: 0
   };
 }
+
+function resolveWalletContract() {
+  if (!walletContractAbi || !WALLET_CONTRACT_ADDRESS || !web3Instance) {
+    return null;
+  }
+
+  walletContractInstance = new web3Instance.eth.Contract(walletContractAbi, WALLET_CONTRACT_ADDRESS);
+  return walletContractInstance;
+}
+
+function formatUsd(value) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function buildEmptyWalletSnapshot() {
+  return {
+    totalBalance: "0.0000",
+    symbol: WALLET_TOKEN_SYMBOL,
+    ethBalance: "0.0000",
+    ethUsd: formatUsd(0),
+    tokenBalance: "0.0000",
+    tokenUsd: formatUsd(0),
+    address: "Not connected",
+    token: {
+      name: WALLET_TOKEN_NAME,
+      symbol: WALLET_TOKEN_SYMBOL,
+      contractAddress: WALLET_CONTRACT_ADDRESS || "Not configured",
+      totalSupply: WALLET_TOTAL_SUPPLY,
+      standard: WALLET_TOKEN_STANDARD
+    },
+    transactions: []
+  };
+}
+
+async function buildWalletSnapshot() {
+  if (!web3Instance) {
+    return buildEmptyWalletSnapshot();
+  }
+
+  try {
+    const accounts = await web3Instance.eth.getAccounts();
+    const primaryAddress = accounts[0] || "";
+    const balanceWei = primaryAddress ? await web3Instance.eth.getBalance(primaryAddress) : "0";
+    const ethBalance = parseFloat(web3Instance.utils.fromWei(balanceWei || "0", "ether")) || 0;
+    let tokenBalance = ethBalance;
+
+    if (primaryAddress && WALLET_CONTRACT_ADDRESS) {
+      const walletContract = resolveWalletContract();
+      if (walletContract) {
+        const ledgerBalance = await walletContract.methods.balanceOf(primaryAddress).call();
+        tokenBalance = parseFloat(web3Instance.utils.fromWei(ledgerBalance || "0", "ether")) || tokenBalance;
+      }
+    }
+
+    const totalsUsd = ethBalance * ETH_USD_RATE;
+    const tokenUsdValue = tokenBalance * ETH_USD_RATE;
+
+    const snapshot = {
+      totalBalance: ethBalance.toFixed(4),
+      symbol: WALLET_TOKEN_SYMBOL,
+      ethBalance: ethBalance.toFixed(4),
+      ethUsd: formatUsd(totalsUsd),
+      tokenBalance: tokenBalance.toFixed(4),
+      tokenUsd: formatUsd(tokenUsdValue),
+      address: primaryAddress || "Not connected",
+      token: {
+        name: WALLET_TOKEN_NAME,
+        symbol: WALLET_TOKEN_SYMBOL,
+        contractAddress: WALLET_CONTRACT_ADDRESS || "Not configured",
+        totalSupply: WALLET_TOTAL_SUPPLY,
+        standard: WALLET_TOKEN_STANDARD
+      },
+      transactions: []
+    };
+
+    if (primaryAddress && !account) {
+      account = primaryAddress;
+    }
+
+    return snapshot;
+  } catch (error) {
+    console.error("Unable to build wallet snapshot:", error);
+    return buildEmptyWalletSnapshot();
+  }
+}
  
 // Define routes - home page
 app.get('/', async(req, res) => {   
@@ -306,48 +416,14 @@ app.post('/register', (req, res) => {
   return res.redirect('/wallet');
 });
 
-app.get('/wallet', requireLogin, (req, res) => {
-  const wallet = {
-    totalBalance: "5000.00",
-    symbol: "ETHR",
-    ethBalance: "2.4500",
-    ethUsd: "$7,840.00 USD",
-    tokenBalance: "5000.00",
-    tokenUsd: "$5,000.00 USD",
-    address: "0x742d35Cc6634C0532925a3b844Bc9e7595F0bEb",
-    token: {
-      name: "Ethereum",
-      symbol: "ETHR",
-      contractAddress: "0x1f9a8a35f8a5b51017f2b9f63d04c2a1f984",
-      totalSupply: "1,000,000 ETHR",
-      standard: "ERC-20 Standard Token"
-    },
-    transactions: [
-      {
-        type: "Payment",
-        date: "28/11/2025, 6:30:00 pm",
-        tx: "0x8f2a...93dc",
-        amount: "-299.99 ETHR",
-        status: "completed"
-      },
-      {
-        type: "Delivery",
-        date: "30/11/2025, 10:20:00 pm",
-        tx: "0x8b7e...2a1d",
-        amount: "125.00 ETHR",
-        status: "completed"
-      },
-      {
-        type: "Payment",
-        date: "01/12/2025, 5:15:00 pm",
-        tx: "0x5d9a...4c8b",
-        amount: "-89.9 ETHR",
-        status: "pending"
-      }
-    ]
-  };
-
-  res.render('wallet', { acct: account, wallet });
+app.get('/wallet', requireLogin, async (req, res) => {
+  try {
+    const wallet = await buildWalletSnapshot();
+    return res.render('wallet', { acct: account, wallet });
+  } catch (error) {
+    console.error('Error rendering wallet:', error);
+    return res.status(500).send('Unable to load wallet data');
+  }
 });
 
 app.get('/admin', requireAdmin, (req, res) => {

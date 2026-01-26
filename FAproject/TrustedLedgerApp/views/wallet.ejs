@@ -67,6 +67,39 @@
       color: rgba(255, 255, 255, 0.85);
     }
 
+    .wallet-connect {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .wallet-connect .btn {
+      min-width: 200px;
+    }
+
+    .wallet-connect-status {
+      font-size: 13px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .wallet-network {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.85);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .wallet-connect-note {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.75);
+      width: 100%;
+      margin-top: 4px;
+    }
+
     .wallet-hero .hero-inner {
       max-width: 1200px;
       margin: 0 auto;
@@ -290,6 +323,13 @@
     .history {
       margin-top: 24px;
     }
+    .history-empty {
+      margin: 0;
+      font-size: 14px;
+      color: var(--gray-600);
+      padding: 24px 0;
+      border-top: 1px solid #eff2ff;
+    }
 
     .tabs {
       display: inline-flex;
@@ -377,6 +417,11 @@
       color: var(--yellow-600);
     }
 
+    .status-alert {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
     .amount-negative {
       color: var(--red-600);
     }
@@ -414,6 +459,12 @@
     <div class="hero-inner">
       <h1>My Wallet</h1>
       <p>Manage your tokens and view transaction history</p>
+      <div class="wallet-connect">
+        <button id="connect-wallet-btn" class="btn btn-primary" type="button">Connect MetaMask</button>
+        <div id="wallet-status" class="wallet-connect-status status-pill status-pending">Not connected</div>
+        <div id="chain-name" class="wallet-network">Network • Unknown</div>
+        <p class="wallet-connect-note">Connect your MetaMask wallet to load live balances and transaction data.</p>
+      </div>
     </div>
   </section>
 
@@ -425,8 +476,8 @@
         <div class="balance-summary">
           <div>
             <div class="total-label">Total Balance</div>
-            <div class="total-value"><%= wallet.totalBalance %></div>
-            <div class="total-currency"><%= wallet.symbol %></div>
+            <div class="total-value" id="total-balance"><%= wallet.totalBalance %></div>
+            <div class="total-currency" id="total-currency"><%= wallet.symbol %></div>
           </div>
           <div class="balance-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
@@ -438,10 +489,10 @@
         </div>
 
         <div class="mini-cards">
-          <div class="mini-card">
+         <div class="mini-card">
             <span><%= wallet.symbol %> Balance</span>
-            <h4><%= wallet.ethBalance %></h4>
-            <p><%= wallet.ethUsd %></p>
+            <h4 id="eth-balance-value"><%= wallet.ethBalance %></h4>
+            <p id="eth-balance-usd"><%= wallet.ethUsd %></p>
           </div>
           <div class="mini-card">
             <span><%= wallet.symbol %> Balance</span>
@@ -453,7 +504,7 @@
         <div class="wallet-address">
           <label>Wallet Address</label>
           <div class="address-bar">
-            <code><%= wallet.address %></code>
+            <code id="wallet-address"><%= wallet.address %></code>
             <button class="copy-btn" type="button">Copy</button>
           </div>
         </div>
@@ -496,21 +547,162 @@
         <button class="tab" type="button">Deliveries</button>
       </div>
 
-      <% wallet.transactions.forEach((tx) => { %>
-        <div class="history-item">
-          <div class="history-icon"><%= tx.type[0] %></div>
-          <div>
-            <h4><%= tx.type %></h4>
-            <p><%= tx.date %></p>
-            <p>Tx: <%= tx.tx %></p>
+      <% if (wallet.transactions && wallet.transactions.length) { %>
+        <% wallet.transactions.forEach((tx) => { %>
+          <div class="history-item">
+            <div class="history-icon"><%= tx.type[0] %></div>
+            <div>
+              <h4><%= tx.type %></h4>
+              <p><%= tx.date %></p>
+              <p>Tx: <%= tx.tx %></p>
+            </div>
+            <div class="history-amount">
+              <div class="<%= tx.amount.startsWith('-') ? 'amount-negative' : '' %>"><%= tx.amount %></div>
+              <div class="status-pill <%= tx.status === 'completed' ? 'status-completed' : 'status-pending' %>"><%= tx.status %></div>
+            </div>
           </div>
-          <div class="history-amount">
-            <div class="<%= tx.amount.startsWith('-') ? 'amount-negative' : '' %>"><%= tx.amount %></div>
-            <div class="status-pill <%= tx.status === 'completed' ? 'status-completed' : 'status-pending' %>"><%= tx.status %></div>
-          </div>
-        </div>
-      <% }) %>
+        <% }) %>
+      <% } else { %>
+        <p class="history-empty">You're all caught up — no transactions yet. Connect your MetaMask account to start tracking activity.</p>
+      <% } %>
     </section>
   </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const connectButton = document.getElementById("connect-wallet-btn");
+      const statusEl = document.getElementById("wallet-status");
+      const addressEl = document.getElementById("wallet-address");
+      const totalBalanceEl = document.getElementById("total-balance");
+      const ethBalanceEl = document.getElementById("eth-balance-value");
+      const ethUsdEl = document.getElementById("eth-balance-usd");
+      const networkEl = document.getElementById("chain-name");
+      const copyBtn = document.querySelector(".copy-btn");
+      const usdPerEth = 1850;
+
+      const chainNames = {
+        "0x1": "Ethereum Mainnet",
+        "0x5": "Goerli Testnet",
+        "0x3": "Ropsten Legacy",
+        "0x4": "Rinkeby Legacy",
+        "0x89": "Polygon Mainnet",
+        "0x13881": "Mumbai Testnet"
+      };
+
+      const activateStatus = (text, tone = "pending") => {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.classList.remove("status-completed", "status-pending", "status-alert");
+        const toneClass =
+          tone === "success" ? "status-completed" : tone === "error" ? "status-alert" : "status-pending";
+        statusEl.classList.add(toneClass);
+      };
+
+      const formatUsd = (value) =>
+        value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const updateNetworkName = async () => {
+        if (!window.ethereum || !networkEl) return;
+        try {
+          const chainId = await window.ethereum.request({ method: "eth_chainId" });
+          const friendly = chainNames[chainId] || `Chain ${parseInt(chainId, 16)}`;
+          networkEl.textContent = `Network • ${friendly}`;
+        } catch {
+          // ignore
+        }
+      };
+
+      const updateAccountData = async (account) => {
+        if (!window.ethereum || !account) return;
+        try {
+          const balanceHex = await window.ethereum.request({
+            method: "eth_getBalance",
+            params: [account, "latest"]
+          });
+          const balanceValue = balanceHex ? Number(BigInt(balanceHex)) / 1e18 : 0;
+          const display = balanceValue.toFixed(4);
+          if (totalBalanceEl) totalBalanceEl.textContent = display;
+          if (ethBalanceEl) ethBalanceEl.textContent = display;
+          if (ethUsdEl) ethUsdEl.textContent = `$${formatUsd(balance * usdPerEth)}`;
+        } catch (error) {
+          console.error("Balance read failed", error);
+        }
+      };
+
+      const handleAccounts = async (accounts) => {
+        if (!accounts || !accounts.length) {
+          activateStatus("Wallet disconnected", "pending");
+          if (connectButton) {
+            connectButton.textContent = "Connect MetaMask";
+            connectButton.disabled = false;
+          }
+          return;
+        }
+
+        const [account] = accounts;
+        if (addressEl) {
+          addressEl.textContent = account;
+        }
+        activateStatus("MetaMask connected", "success");
+        if (connectButton) {
+          connectButton.textContent = "Connected";
+          connectButton.disabled = true;
+        }
+        await Promise.all([updateAccountData(account), updateNetworkName()]);
+      };
+
+      const connectWallet = async () => {
+        if (!window.ethereum) {
+          activateStatus("MetaMask not detected", "error");
+          if (connectButton) connectButton.disabled = true;
+          return;
+        }
+
+        try {
+          const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+          await handleAccounts(accounts);
+        } catch (error) {
+          const rejected = error?.code === 4001;
+          activateStatus(rejected ? "Connection rejected" : "Unable to connect", "error");
+        }
+      };
+
+      if (copyBtn && addressEl) {
+        copyBtn.addEventListener("click", async () => {
+          const text = addressEl.textContent.trim();
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            const original = copyBtn.textContent;
+            copyBtn.textContent = "Copied";
+            setTimeout(() => (copyBtn.textContent = original), 1200);
+          } catch {
+            // fallback to manual selection
+            const range = document.createRange();
+            range.selectNodeContents(addressEl);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            document.execCommand("copy");
+            selection.removeAllRanges();
+          }
+        });
+      }
+
+      if (!window.ethereum) {
+        activateStatus("MetaMask not installed", "error");
+        if (connectButton) connectButton.disabled = true;
+        return;
+      }
+
+      if (connectButton) {
+        connectButton.addEventListener("click", connectWallet);
+      }
+
+      window.ethereum.on?.("accountsChanged", handleAccounts);
+      window.ethereum.on?.("chainChanged", () => updateNetworkName());
+
+      updateNetworkName();
+    });
+  </script>
 </body>
 </html>
