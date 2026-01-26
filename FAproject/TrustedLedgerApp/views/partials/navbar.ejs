@@ -396,17 +396,13 @@
           const networkInfo = networks[chainDecimal] || networks[String(chainDecimal)];
           const contractAddress = networkInfo && networkInfo.address ? networkInfo.address : "";
 
-          if (!contractAddress) {
-            return;
-          }
-
           await fetch("/web3Connect", {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              contractAddress: contractAddress,
+              contractAddress: contractAddress || "",
               acct: account,
               providerUrl: providerUrl || undefined
             })

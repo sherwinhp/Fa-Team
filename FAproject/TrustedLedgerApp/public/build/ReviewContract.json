@@ -125,8 +125,7 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function",
-      "constant": true
+      "type": "function"
     },
     {
       "inputs": [
@@ -150,8 +149,7 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function",
-      "constant": true
+      "type": "function"
     },
     {
       "inputs": [
@@ -170,8 +168,7 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function",
-      "constant": true
+      "type": "function"
     }
   ],
   "metadata": "{\"compiler\":{\"version\":\"0.8.19+commit.7dd6d404\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"productId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"buyer\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"rating\",\"type\":\"uint8\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"purchaseId\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"deliveryTxHash\",\"type\":\"bytes32\"}],\"name\":\"ReviewSubmitted\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"productId\",\"type\":\"uint256\"}],\"name\":\"getAverageRating\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"average\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"count\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"productId\",\"type\":\"uint256\"}],\"name\":\"getReviews\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"productId\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"buyer\",\"type\":\"address\"},{\"internalType\":\"uint8\",\"name\":\"rating\",\"type\":\"uint8\"},{\"internalType\":\"string\",\"name\":\"commentHash\",\"type\":\"string\"},{\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"purchaseId\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"deliveryTxHash\",\"type\":\"bytes32\"}],\"internalType\":\"struct ReviewContract.Review[]\",\"name\":\"\",\"type\":\"tuple[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"purchaseId\",\"type\":\"bytes32\"}],\"name\":\"hasReviewed\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"productId\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"purchaseId\",\"type\":\"bytes32\"},{\"internalType\":\"uint8\",\"name\":\"rating\",\"type\":\"uint8\"},{\"internalType\":\"string\",\"name\":\"commentHash\",\"type\":\"string\"},{\"internalType\":\"bytes32\",\"name\":\"deliveryTxHash\",\"type\":\"bytes32\"}],\"name\":\"submitReview\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"title\":\"ReviewContract\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"notice\":\"Stores product reviews on-chain and links them to purchase proofs.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"project:/contracts/ReviewContract.sol\":\"ReviewContract\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"project:/contracts/ReviewContract.sol\":{\"keccak256\":\"0x681651e6d8cebc71d8f72f604a99edea93c024edd623182b342991e337913312\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://f31ee1379aab3e0604b9e14335e4aad2f75b08b11bd7b52053fb2870ba59d1c6\",\"dweb:/ipfs/QmT1Y5jv1Y5tMiMLzF8vdt5LVn1hWzMnyFrhD9brWdFAv8\"]}},\"version\":1}",
@@ -14858,8 +14855,7 @@
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2026-01-26T01:36:24.719Z",
-  "networkType": "ethereum",
+  "updatedAt": "2026-01-26T07:12:03.877Z",
   "devdoc": {
     "kind": "dev",
     "methods": {},

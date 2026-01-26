@@ -22,7 +22,6 @@ app.use(session({
   saveUninitialized: false
 }));
 
-<<<<<<< Updated upstream
 const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8545';
 const ETH_USD_RATE = Number(process.env.ETH_USD_RATE) || 1850;
 const WALLET_TOKEN_SYMBOL = process.env.WALLET_TOKEN_SYMBOL || 'ETHR';
@@ -30,7 +29,7 @@ const WALLET_TOKEN_NAME = process.env.WALLET_TOKEN_NAME || 'Ethereum';
 const WALLET_TOKEN_STANDARD = process.env.WALLET_TOKEN_STANDARD || 'ERC-20 Standard Token';
 const WALLET_CONTRACT_ADDRESS = process.env.WALLET_CONTRACT_ADDRESS || '';
 const WALLET_TOTAL_SUPPLY = process.env.WALLET_TOTAL_SUPPLY || '1,000,000 ETHR';
-=======
+const sellerAddress = "0x46EB73Cb66991C07622b3aB77a6E9A93139EE661";
 const ganacheAccounts = (process.env.GANACHE_ACCOUNTS || process.env.GANACHE_ACCOUNT || "")
   .split(",")
   .map((value) => value.trim())
@@ -40,7 +39,6 @@ const ganacheChainIds = (process.env.GANACHE_CHAIN_IDS || "")
   .map((value) => value.trim())
   .filter(Boolean);
 const ganacheProviderUrl = process.env.GANACHE_PROVIDER_URL || "http://127.0.0.1:7545";
->>>>>>> Stashed changes
 
 app.use((req, res, next) => {
   res.locals.isLoggedIn = Boolean(req.session && req.session.user);
@@ -59,7 +57,6 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 // declare the global variables
 let account = '';
 let shipmentCount = 0;
-<<<<<<< Updated upstream
 let loading = true;
 let web3Instance = new Web3(WEB3_PROVIDER_URL);
 let contractInstance = null;
@@ -72,12 +69,6 @@ try {
 } catch (error) {
   console.warn("Wallet contract ABI not available:", error.message || error);
 }
-=======
-let loading = true;  
-let web3Instance = null;
-let contractInstance = null;   
-const sellerAddress = "0x46EB73Cb66991C07622b3aB77a6E9A93139EE661";
->>>>>>> Stashed changes
 
 const mockProducts = [
   {
@@ -353,23 +344,103 @@ function buildEmptyWalletSnapshot() {
   };
 }
 
-async function buildWalletSnapshot() {
+const WALLET_TX_TYPE_LABELS = {
+  0: "Top Up",
+  1: "Transfer",
+  2: "Escrow Created",
+  3: "Escrow Released",
+  4: "Escrow Refunded"
+};
+
+const normalizeAddress = (value) => String(value || "").toLowerCase();
+
+const formatWalletAmount = (amountWei, outgoing) => {
   if (!web3Instance) {
+    return outgoing ? "-0.0000" : "+0.0000";
+  }
+  const ethAmount = Number.parseFloat(web3Instance.utils.fromWei(amountWei || "0", "ether"));
+  const display = Number.isFinite(ethAmount) ? ethAmount.toFixed(4) : "0.0000";
+  return outgoing ? `-${display}` : `+${display}`;
+};
+
+const formatWalletTimestamp = (timestamp) => {
+  const seconds = Number.parseInt(timestamp || "0", 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "Unknown date";
+  }
+  return new Date(seconds * 1000).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+
+async function loadWalletTransactions(walletContract, primaryAddress, limit = 8) {
+  if (!walletContract || !primaryAddress) {
+    return [];
+  }
+
+  const accountLower = normalizeAddress(primaryAddress);
+  const txIds = await walletContract.methods.getAccountTransactions(primaryAddress).call();
+  if (!txIds || !txIds.length) {
+    return [];
+  }
+
+  const recentIds = txIds.slice(-limit).reverse();
+  const records = await Promise.all(
+    recentIds.map((txId) => walletContract.methods.getTransaction(txId).call())
+  );
+
+  return records.map((record) => {
+    const typeIndex = Number(record.txType);
+    const typeLabel = WALLET_TX_TYPE_LABELS[typeIndex] || "Activity";
+    const from = normalizeAddress(record.from);
+    const to = normalizeAddress(record.to);
+    const outgoing = from === accountLower && to !== accountLower;
+    const amount = formatWalletAmount(record.amount, outgoing);
+    const reference =
+      record.txReference && record.txReference !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ? record.txReference
+        : "";
+
+    return {
+      type: typeLabel,
+      date: formatWalletTimestamp(record.timestamp),
+      amount,
+      status: "completed",
+      direction: outgoing ? "out" : "in",
+      reference
+    };
+  });
+}
+
+async function buildWalletSnapshot(targetAccount) {
+  if (!targetAccount) {
     return buildEmptyWalletSnapshot();
   }
 
+  if (!web3Instance) {
+    return {
+      ...buildEmptyWalletSnapshot(),
+      address: targetAccount
+    };
+  }
+
   try {
-    const accounts = await web3Instance.eth.getAccounts();
-    const primaryAddress = accounts[0] || "";
+    const primaryAddress = targetAccount;
     const balanceWei = primaryAddress ? await web3Instance.eth.getBalance(primaryAddress) : "0";
     const ethBalance = parseFloat(web3Instance.utils.fromWei(balanceWei || "0", "ether")) || 0;
     let tokenBalance = ethBalance;
+    let transactions = [];
 
     if (primaryAddress && WALLET_CONTRACT_ADDRESS) {
       const walletContract = resolveWalletContract();
       if (walletContract) {
         const ledgerBalance = await walletContract.methods.balanceOf(primaryAddress).call();
         tokenBalance = parseFloat(web3Instance.utils.fromWei(ledgerBalance || "0", "ether")) || tokenBalance;
+        transactions = await loadWalletTransactions(walletContract, primaryAddress);
       }
     }
 
@@ -391,17 +462,16 @@ async function buildWalletSnapshot() {
         totalSupply: WALLET_TOTAL_SUPPLY,
         standard: WALLET_TOKEN_STANDARD
       },
-      transactions: []
+      transactions
     };
-
-    if (primaryAddress && !account) {
-      account = primaryAddress;
-    }
 
     return snapshot;
   } catch (error) {
     console.error("Unable to build wallet snapshot:", error);
-    return buildEmptyWalletSnapshot();
+    return {
+      ...buildEmptyWalletSnapshot(),
+      address: targetAccount
+    };
   }
 }
  
@@ -496,23 +566,36 @@ app.post('/register', (req, res) => {
   return res.redirect('/wallet');
 });
 
-<<<<<<< Updated upstream
 app.get('/wallet', requireLogin, async (req, res) => {
   try {
-    const wallet = await buildWalletSnapshot();
+    const wallet = await buildWalletSnapshot(account);
     return res.render('wallet', { acct: account, wallet });
   } catch (error) {
     console.error('Error rendering wallet:', error);
     return res.status(500).send('Unable to load wallet data');
   }
-=======
-app.get('/wallet', requireLogin, (req, res) => {
-  const wallet = {
-    transactions: []
-  };
+});
 
-  res.render('wallet', { acct: account, wallet });
->>>>>>> Stashed changes
+app.get('/api/wallet', requireLogin, async (req, res) => {
+  const accountAddress = String(req.query.account || "").trim();
+
+  if (!accountAddress || !accountAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid account address"
+    });
+  }
+
+  try {
+    const wallet = await buildWalletSnapshot(accountAddress);
+    return res.json(wallet);
+  } catch (error) {
+    console.error("Error building wallet snapshot:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load wallet data"
+    });
+  }
 });
 
 app.get('/admin', requireAdmin, (req, res) => {
@@ -650,10 +733,10 @@ app.post('/web3Connect', express.json(), async (req, res) => {
     console.log("Account:", acct);
     
     // Validate inputs
-    if (!contractAddress || !acct) {
+    if (!acct) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: contractAddress and acct'
+        message: 'Missing required field: acct'
       });
     }
     
@@ -665,8 +748,8 @@ app.post('/web3Connect', express.json(), async (req, res) => {
       });
     }
     
-    // Validate contract address format
-    if (!contractAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+    // Validate contract address format if provided
+    if (contractAddress && !contractAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid contract address format'
@@ -677,17 +760,21 @@ app.post('/web3Connect', express.json(), async (req, res) => {
     
     // Initialize Web3 if not already done
     // For MetaMask: use window.ethereum provider from frontend, or fall back to http provider
-    if (!web3Instance) {
-      web3Instance = new Web3(providerUrl || 'http://localhost:8545');
+    const resolvedProviderUrl = providerUrl || WEB3_PROVIDER_URL || 'http://localhost:8545';
+    web3Instance = new Web3(resolvedProviderUrl);
+    
+    if (contractAddress) {
+      // Load contract ABI
+      const contractABI = JSON.parse(fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')).abi;
+      contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
+      
+      // Get shipment count
+      const count = await contractInstance.methods.getShipmentCount().call();
+      shipmentCount = parseInt(count);
+    } else {
+      contractInstance = null;
+      shipmentCount = 0;
     }
-    
-    // Load contract ABI
-    const contractABI = JSON.parse(fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')).abi;
-    contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
-    
-    // Get shipment count
-    const count = await contractInstance.methods.getShipmentCount().call();
-    shipmentCount = parseInt(count);
     
     loading = false;
     
