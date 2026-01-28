@@ -102,7 +102,7 @@
       <h1 style="margin: 0 0 16px;">Checkout</h1>
       <section class="card">
         <div id="checkoutList" class="list">
-          <div class="muted">Loading on-chain cart...</div>
+          <div class="muted">Loading cart...</div>
         </div>
         <div id="checkoutSummary"></div>
       </section>
@@ -224,27 +224,27 @@
 
         const loadCart = async () => {
           if (!checkoutList) {
-            return;
+            return null;
           }
-          const account = window.appWallet ? window.appWallet.getAccount() : "";
-          if (!account) {
-            checkoutList.innerHTML = `<div class="muted">Connect MetaMask to load your cart.</div>`;
+          try {
+            const res = await fetch("/api/cart");
+            const payload = await res.json();
+            if (!res.ok || !payload.success) {
+              checkoutList.innerHTML = `<div class="muted">${payload.message || "Unable to load cart."}</div>`;
+              if (checkoutSummary) {
+                checkoutSummary.innerHTML = "";
+              }
+              return null;
+            }
+            renderCart(payload.items || [], payload.totalEth || "0.0000");
+            return payload;
+          } catch (err) {
+            checkoutList.innerHTML = `<div class="muted">${err.message || "Unable to load cart."}</div>`;
             if (checkoutSummary) {
               checkoutSummary.innerHTML = "";
             }
             return null;
           }
-          const res = await fetch(`/api/cart?account=${encodeURIComponent(account)}`);
-          const payload = await res.json();
-          if (!res.ok || !payload.success) {
-            checkoutList.innerHTML = `<div class="muted">${payload.message || "Unable to load cart."}</div>`;
-            if (checkoutSummary) {
-              checkoutSummary.innerHTML = "";
-            }
-            return null;
-          }
-          renderCart(payload.items || [], payload.totalEth || "0.0000");
-          return payload;
         };
 
         const handleCheckout = async () => {
@@ -335,32 +335,28 @@
             return;
           }
 
-          try {
-            const recordResponse = await fetch("/api/orders/tx/payment", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                trackingId,
-                paymentTxHash: txHash,
-                account
-              })
-            });
-            const recordPayload = await recordResponse.json();
-            if (recordResponse.ok && recordPayload.success) {
-              await sendTransaction(recordPayload.txData);
+            try {
+              const recordResponse = await fetch("/api/orders/tx/payment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  trackingId,
+                  paymentTxHash: txHash,
+                  account
+                })
+              });
+              const recordPayload = await recordResponse.json();
+              if (recordResponse.ok && recordPayload.success) {
+                await sendTransaction(recordPayload.txData);
+              }
+              await fetch("/api/cart/clear", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+              });
+              loadCart();
+            } catch (err) {
+              // ignore storage errors
             }
-            const clearResponse = await fetch("/api/cart/tx/clear", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ account })
-            });
-            const clearPayload = await clearResponse.json();
-            if (clearResponse.ok && clearPayload.success) {
-              await sendTransaction(clearPayload.txData);
-            }
-          } catch (err) {
-            // ignore storage errors
-          }
 
           window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
         };

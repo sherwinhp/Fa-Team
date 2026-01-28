@@ -813,33 +813,21 @@
 
       if (addToCartButton) {
         addToCartButton.addEventListener("click", async () => {
-          let account = window.appWallet ? window.appWallet.getAccount() : "";
-          if (!account && window.appWallet) {
-            const result = await window.appWallet.connect();
-            account = result && result.account ? result.account : "";
-          }
-          if (!account) {
-            alert("Connect MetaMask to add items to the cart.");
-            return;
-          }
           const productId = addToCartButton.dataset.productId;
-          const response = await fetch("/api/cart/tx/add", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              productId,
-              quantity: 1,
-              account
-            })
-          });
-          const payload = await response.json();
-          if (!response.ok || !payload.success) {
-            alert(payload.message || "Unable to add to cart.");
-            return;
-          }
-          const txHash = await sendTransaction(payload.txData);
-          if (txHash) {
+          try {
+            const response = await fetch("/api/cart/add", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productId, quantity: 1 })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              alert(payload.message || "Unable to add item to cart.");
+              return;
+            }
             window.location.href = "/cart";
+          } catch (error) {
+            alert(error.message || "Unable to add item to cart.");
           }
         });
       }

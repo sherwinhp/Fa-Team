@@ -173,9 +173,9 @@
         }
         ordersList.innerHTML = orders.map((order) => {
           const date = order.createdAt ? new Date(order.createdAt).toLocaleString() : "Unknown";
-          const reviewButton = order.statusLabel === "Delivered"
-            ? `<a class="btn" style="background:#10b981;" href="/shipping/tracker?trackingId=${encodeURIComponent(order.trackingId)}&review=1#review">Leave Review</a>`
-            : "";
+        const reviewButton = order.statusLabel === "Delivered"
+          ? `<a class="btn" style="background:#10b981;" href="/review/${encodeURIComponent(order.trackingId)}">Leave Review</a>`
+          : "";
           return `
             <div class="row">
               <div>

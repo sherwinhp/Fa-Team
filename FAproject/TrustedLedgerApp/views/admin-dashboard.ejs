@@ -457,6 +457,22 @@
       const deleteButtons = Array.from(document.querySelectorAll(".delete-product"));
       const orderList = document.getElementById("orderList");
       const allowedChains = ["0x539", "0x1691"];
+      let contractAdmin = "";
+
+      const loadContractAdmin = async () => {
+        try {
+          const res = await fetch("/api/contracts/admin");
+          const payload = await res.json();
+          if (res.ok && payload.success && payload.admin) {
+            contractAdmin = payload.admin;
+          }
+        } catch (err) {
+          console.warn("Unable to load contract admin:", err);
+          contractAdmin = "";
+        }
+      };
+
+      loadContractAdmin();
 
       const getConnectedAccount = async () => {
         if (window.appWallet && window.appWallet.isConnected()) {
@@ -617,6 +633,10 @@
           const account = await getConnectedAccount();
           if (!account) {
             alert("Connect MetaMask to update orders.");
+            return;
+          }
+          if (contractAdmin && account.toLowerCase() !== contractAdmin.toLowerCase()) {
+            alert(`Connect the contract owner (${contractAdmin}) before updating order status.`);
             return;
           }
           const onChain = await ensureGanacheChain();

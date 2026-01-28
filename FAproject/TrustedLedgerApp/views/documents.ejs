@@ -210,6 +210,10 @@
             <label>Verification result</label>
             <div id="verifyResult" class="status-pill status-pending">Waiting</div>
           </div>
+          <p style="font-size:13px;color:#475569;margin-top:10px;">
+            Verification uses server-side hash comparison and does <strong>not</strong> cost gas.
+            Registration and attestation still require admin approval and MetaMask.
+          </p>
           <% if (userRole === 'admin') { %>
             <div class="field" style="display:flex;gap:10px;flex-direction:row;">
               <button class="btn" id="approveInvoiceBtn" type="button">Approve</button>

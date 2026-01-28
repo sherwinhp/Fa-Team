@@ -115,7 +115,7 @@
 
       <section class="card">
         <div id="cartList" class="list">
-          <div class="empty">Loading on-chain cart...</div>
+          <div class="empty">Loading cart...</div>
         </div>
         <div id="cartSummary" style="margin-top: 16px;"></div>
       </section>
@@ -126,37 +126,16 @@
         const cartList = document.getElementById("cartList");
         const cartSummary = document.getElementById("cartSummary");
 
-        const sendTransaction = async (txData) => {
-          if (!window.ethereum) {
-            alert("MetaMask not detected.");
-            return null;
-          }
-          try {
-            return await window.ethereum.request({
-              method: "eth_sendTransaction",
-              params: [txData]
-            });
-          } catch (err) {
-            alert("Transaction canceled or failed.");
-            return null;
-          }
-        };
-
         const loadCart = async () => {
           if (!cartList) return;
-          const account = window.appWallet ? window.appWallet.getAccount() : "";
-          if (!account) {
-            cartList.innerHTML = `<div class="empty">Connect MetaMask to load your on-chain cart.</div>`;
-            if (cartSummary) {
-              cartSummary.innerHTML = "";
-            }
-            return;
-          }
           try {
-            const res = await fetch(`/api/cart?account=${encodeURIComponent(account)}`);
+            const res = await fetch("/api/cart");
             const payload = await res.json();
             if (!res.ok || !payload.success) {
               cartList.innerHTML = `<div class="empty">${payload.message || "Unable to load cart."}</div>`;
+              if (cartSummary) {
+                cartSummary.innerHTML = "";
+              }
               return;
             }
             const items = payload.items || [];
@@ -196,6 +175,9 @@
             }
           } catch (err) {
             cartList.innerHTML = `<div class="empty">${err.message || "Unable to load cart."}</div>`;
+            if (cartSummary) {
+              cartSummary.innerHTML = "";
+            }
           }
         };
 
@@ -204,24 +186,20 @@
             const button = event.target.closest("[data-remove-id]");
             if (!button) return;
             const productId = button.getAttribute("data-remove-id");
-            const account = window.appWallet ? window.appWallet.getAccount() : "";
-            if (!account) {
-              alert("Connect MetaMask to update the cart.");
-              return;
-            }
-            const res = await fetch("/api/cart/tx/remove", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ productId, account })
-            });
-            const payload = await res.json();
-            if (!res.ok || !payload.success) {
-              alert(payload.message || "Unable to remove item.");
-              return;
-            }
-            const txHash = await sendTransaction(payload.txData);
-            if (txHash) {
+            try {
+              const res = await fetch("/api/cart/remove", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ productId })
+              });
+              const payload = await res.json();
+              if (!res.ok || !payload.success) {
+                alert(payload.message || "Unable to remove item.");
+                return;
+              }
               loadCart();
+            } catch (err) {
+              alert(err.message || "Unable to remove item.");
             }
           });
         }
@@ -229,24 +207,19 @@
         if (cartSummary) {
           cartSummary.addEventListener("click", async (event) => {
             if (event.target && event.target.id === "clearCartButton") {
-              const account = window.appWallet ? window.appWallet.getAccount() : "";
-              if (!account) {
-                alert("Connect MetaMask to update the cart.");
-                return;
-              }
-              const res = await fetch("/api/cart/tx/clear", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ account })
-              });
-              const payload = await res.json();
-              if (!res.ok || !payload.success) {
-                alert(payload.message || "Unable to clear cart.");
-                return;
-              }
-              const txHash = await sendTransaction(payload.txData);
-              if (txHash) {
+              try {
+                const res = await fetch("/api/cart/clear", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" }
+                });
+                const payload = await res.json();
+                if (!res.ok || !payload.success) {
+                  alert(payload.message || "Unable to clear cart.");
+                  return;
+                }
                 loadCart();
+              } catch (err) {
+                alert(err.message || "Unable to clear cart.");
               }
             }
           });
