@@ -114,34 +114,151 @@
       </div>
 
       <section class="card">
-        <% if (!cartItems || cartItems.length === 0) { %>
-          <div class="empty">Your cart is empty.</div>
-        <% } else { %>
-          <% cartItems.forEach((item) => { %>
-            <div class="item">
-              <% const img = item.product.images && item.product.images.length ? item.product.images[0] : '/images/default-product.jpeg'; %>
-              <img class="thumb" src="<%= img %>" alt="<%= item.product.productInfo.name %>">
-              <div>
-                <h3 style="margin: 0 0 6px;"><%= item.product.productInfo.name %></h3>
-                <div style="color: var(--muted); font-size: 13px;">Qty: <%= item.quantity %></div>
-                <div style="color: var(--brand); font-weight: 700;">$<%= item.product.productInfo.price %> ETHR</div>
-              </div>
-              <form class="actions" method="post" action="/cart/remove">
-                <input type="hidden" name="productId" value="<%= item.product.id %>">
-                <button class="btn btn-outline" type="submit">Remove</button>
-                <a class="btn btn-primary" href="/product/<%= item.product.id %>">View</a>
-              </form>
-            </div>
-          <% }) %>
-          <form method="post" action="/cart/clear" style="margin-top: 16px;">
-            <button class="btn btn-outline" type="submit">Clear Cart</button>
-          </form>
-          <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-            <div style="font-weight: 700;">Total: $<%= totalEth %> ETHR</div>
-            <a class="btn btn-primary" href="/checkout">Proceed to Checkout</a>
-          </div>
-        <% } %>
+        <div id="cartList" class="list">
+          <div class="empty">Loading on-chain cart...</div>
+        </div>
+        <div id="cartSummary" style="margin-top: 16px;"></div>
       </section>
     </main>
+
+    <script>
+      (() => {
+        const cartList = document.getElementById("cartList");
+        const cartSummary = document.getElementById("cartSummary");
+
+        const sendTransaction = async (txData) => {
+          if (!window.ethereum) {
+            alert("MetaMask not detected.");
+            return null;
+          }
+          try {
+            return await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [txData]
+            });
+          } catch (err) {
+            alert("Transaction canceled or failed.");
+            return null;
+          }
+        };
+
+        const loadCart = async () => {
+          if (!cartList) return;
+          const account = window.appWallet ? window.appWallet.getAccount() : "";
+          if (!account) {
+            cartList.innerHTML = `<div class="empty">Connect MetaMask to load your on-chain cart.</div>`;
+            if (cartSummary) {
+              cartSummary.innerHTML = "";
+            }
+            return;
+          }
+          try {
+            const res = await fetch(`/api/cart?account=${encodeURIComponent(account)}`);
+            const payload = await res.json();
+            if (!res.ok || !payload.success) {
+              cartList.innerHTML = `<div class="empty">${payload.message || "Unable to load cart."}</div>`;
+              return;
+            }
+            const items = payload.items || [];
+            if (!items.length) {
+              cartList.innerHTML = `<div class="empty">Your cart is empty.</div>`;
+              if (cartSummary) {
+                cartSummary.innerHTML = "";
+              }
+              return;
+            }
+            cartList.innerHTML = items.map((item) => {
+              const img = item.product.images && item.product.images.length ? item.product.images[0] : "/images/default-product.jpeg";
+              return `
+                <div class="item">
+                  <img class="thumb" src="${img}" alt="${item.product.productInfo.name}">
+                  <div>
+                    <h3 style="margin: 0 0 6px;">${item.product.productInfo.name}</h3>
+                    <div style="color: var(--muted); font-size: 13px;">Qty: ${item.quantity}</div>
+                    <div style="color: var(--brand); font-weight: 700;">$${item.product.productInfo.price} ETHR</div>
+                  </div>
+                  <div class="actions">
+                    <button class="btn btn-outline" data-remove-id="${item.product.id}">Remove</button>
+                    <a class="btn btn-primary" href="/product/${item.product.id}">View</a>
+                  </div>
+                </div>
+              `;
+            }).join("");
+
+            if (cartSummary) {
+              cartSummary.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                  <div style="font-weight: 700;">Total: $${payload.totalEth} ETHR</div>
+                  <a class="btn btn-primary" href="/checkout">Proceed to Checkout</a>
+                </div>
+                <button class="btn btn-outline" id="clearCartButton" type="button" style="margin-top: 12px;">Clear Cart</button>
+              `;
+            }
+          } catch (err) {
+            cartList.innerHTML = `<div class="empty">${err.message || "Unable to load cart."}</div>`;
+          }
+        };
+
+        if (cartList) {
+          cartList.addEventListener("click", async (event) => {
+            const button = event.target.closest("[data-remove-id]");
+            if (!button) return;
+            const productId = button.getAttribute("data-remove-id");
+            const account = window.appWallet ? window.appWallet.getAccount() : "";
+            if (!account) {
+              alert("Connect MetaMask to update the cart.");
+              return;
+            }
+            const res = await fetch("/api/cart/tx/remove", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productId, account })
+            });
+            const payload = await res.json();
+            if (!res.ok || !payload.success) {
+              alert(payload.message || "Unable to remove item.");
+              return;
+            }
+            const txHash = await sendTransaction(payload.txData);
+            if (txHash) {
+              loadCart();
+            }
+          });
+        }
+
+        if (cartSummary) {
+          cartSummary.addEventListener("click", async (event) => {
+            if (event.target && event.target.id === "clearCartButton") {
+              const account = window.appWallet ? window.appWallet.getAccount() : "";
+              if (!account) {
+                alert("Connect MetaMask to update the cart.");
+                return;
+              }
+              const res = await fetch("/api/cart/tx/clear", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account })
+              });
+              const payload = await res.json();
+              if (!res.ok || !payload.success) {
+                alert(payload.message || "Unable to clear cart.");
+                return;
+              }
+              const txHash = await sendTransaction(payload.txData);
+              if (txHash) {
+                loadCart();
+              }
+            }
+          });
+        }
+
+        loadCart();
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) {
+            loadCart();
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

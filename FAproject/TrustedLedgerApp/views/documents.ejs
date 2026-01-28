@@ -231,6 +231,17 @@
       const verifyResult = document.getElementById("verifyResult");
       const approveInvoiceBtn = document.getElementById("approveInvoiceBtn");
       const rejectInvoiceBtn = document.getElementById("rejectInvoiceBtn");
+      const urlParams = new URLSearchParams(window.location.search);
+      const prefillTrackingId = urlParams.get("trackingId");
+
+      if (prefillTrackingId) {
+        if (invoiceTrackingId) {
+          invoiceTrackingId.value = prefillTrackingId;
+        }
+        if (verifyTrackingId) {
+          verifyTrackingId.value = prefillTrackingId;
+        }
+      }
 
       const ensureGanacheChain = async () => {
         if (!window.ethereum) {
@@ -277,18 +288,16 @@
         return new TextEncoder().encode(body + xref.join("\\n") + "\\n" + trailer);
       };
 
-      const getOrderItems = (trackingId) => {
+      const getOrderDetails = async (trackingId) => {
         try {
-          const raw = localStorage.getItem(`order:${trackingId}`);
-          if (!raw) return [];
-          const payload = JSON.parse(raw);
-          return {
-            items: Array.isArray(payload.items) ? payload.items : [],
-            buyerEmail: payload.buyerEmail || "",
-            recipientAddress: payload.recipientAddress || ""
-          };
+          const res = await fetch(`/api/orders/${encodeURIComponent(trackingId)}`);
+          const payload = await res.json();
+          if (!res.ok || !payload.success) {
+            return null;
+          }
+          return payload;
         } catch (err) {
-          return { items: [], buyerEmail: "", recipientAddress: "" };
+          return null;
         }
       };
 
@@ -330,6 +339,16 @@
             alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
             return;
           }
+          if (!window.ethereum) {
+            alert("MetaMask not detected.");
+            return;
+          }
+          const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+          const account = accounts && accounts[0] ? accounts[0] : "";
+          if (!account) {
+            alert("Connect MetaMask to continue.");
+            return;
+          }
 
           const shipment = await fetchShipment(trackingId);
           if (!shipment) {
@@ -337,10 +356,11 @@
             return;
           }
 
-          const orderInfo = getOrderItems(trackingId);
-          const items = orderInfo.items || [];
-          const buyerEmail = orderInfo.buyerEmail || "<%= userEmail || '' %>";
-          const recipientAddress = orderInfo.recipientAddress || shipment.recipientAddress || "Address on file";
+          const orderDetails = await getOrderDetails(trackingId);
+          const items = orderDetails && orderDetails.orderItems ? orderDetails.orderItems : [];
+          const buyerEmail = "<%= userEmail || '' %>";
+          const recipientAddress = shipment.recipientAddress || "Address on file";
+          const paymentTxHash = orderDetails && orderDetails.paymentTxHash ? orderDetails.paymentTxHash : "";
           const qrPayload = `${window.location.origin}/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
           const lines = [
             "TrustedLedger Invoice",
@@ -352,11 +372,15 @@
             `Seller: ${shipment.seller || "Unknown"}`,
             `Date: ${new Date().toLocaleString()}`,
             `Amount (ETH): ${shipment.shipmentValue || "0"}`,
+            `Payment Tx: ${paymentTxHash || "Pending"}`,
             `QR Payload: ${qrPayload}`,
             "Items:"
           ];
           items.forEach((item, index) => {
-            lines.push(`- ${item.name || `Product ${index + 1}`} (${item.id || "N/A"})`);
+            lines.push(`- ${item.name || `Product ${index + 1}`} (${item.productId || "N/A"}) x${item.quantity || 1}`);
+            if (item.imageUrl) {
+              lines.push(`  Image: ${item.imageUrl}`);
+            }
           });
 
           const pdfBytes = buildPdf(lines);
@@ -365,7 +389,7 @@
           const txRes = await fetch("/api/invoices/tx/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ trackingId, invoiceHash })
+            body: JSON.stringify({ trackingId, invoiceHash, account })
           });
           const txPayload = await txRes.json();
           if (!txRes.ok || !txPayload.success) {
@@ -411,6 +435,8 @@
             return;
           }
           setStatus(verifyResult, payload.authentic ? "Approved" : "Rejected");
+          const status = payload.authentic ? "approved" : "rejected";
+          window.location.href = `/documents/verified?trackingId=${encodeURIComponent(trackingId)}&status=${status}`;
         });
       }
 
@@ -425,10 +451,20 @@
           alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
           return;
         }
+        if (!window.ethereum) {
+          alert("MetaMask not detected.");
+          return;
+        }
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const account = accounts && accounts[0] ? accounts[0] : "";
+        if (!account) {
+          alert("Connect MetaMask to continue.");
+          return;
+        }
         const res = await fetch("/api/invoices/tx/attest", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ trackingId, authentic })
+          body: JSON.stringify({ trackingId, authentic, account })
         });
         const payload = await res.json();
         if (!res.ok || !payload.success) {

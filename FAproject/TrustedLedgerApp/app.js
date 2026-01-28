@@ -43,6 +43,10 @@ const ganacheChainIds = (process.env.GANACHE_CHAIN_IDS || "")
   .map((value) => value.trim())
   .filter(Boolean);
 const ganacheProviderUrl = process.env.GANACHE_PROVIDER_URL || "http://127.0.0.1:7545";
+const GANACHE_CHAIN_ID_FALLBACKS = new Set([5777, 1337]);
+const AUTO_STATUS_ENABLED = String(process.env.AUTO_STATUS_ENABLED || "true").toLowerCase() === "true";
+const AUTO_STATUS_INTERVAL_MS = Number(process.env.AUTO_STATUS_INTERVAL_MS) || 5 * 60 * 1000;
+const AUTO_STATUS_ACCOUNT = process.env.AUTO_STATUS_ACCOUNT || "";
 
 app.use((req, res, next) => {
   res.locals.isLoggedIn = Boolean(req.session && req.session.user);
@@ -58,6 +62,7 @@ app.use((req, res, next) => {
 //start the server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+setInterval(autoAdvanceShipments, AUTO_STATUS_INTERVAL_MS);
 // declare the global variables
 let account = '';
 let shipmentCount = 0;
@@ -67,54 +72,7 @@ let contractInstance = null;
 let walletContractInstance = null;
 const upload = multer({ storage: multer.memoryStorage() });
 
-const CARTS_PATH = path.join(__dirname, "data", "carts.json");
-let persistedCarts = {};
-
-const loadPersistedCarts = () => {
-  try {
-    if (fs.existsSync(CARTS_PATH)) {
-      const raw = fs.readFileSync(CARTS_PATH, "utf8");
-      persistedCarts = raw ? JSON.parse(raw) : {};
-    }
-  } catch (error) {
-    persistedCarts = {};
-  }
-};
-
-const savePersistedCarts = () => {
-  try {
-    fs.mkdirSync(path.dirname(CARTS_PATH), { recursive: true });
-    fs.writeFileSync(CARTS_PATH, JSON.stringify(persistedCarts, null, 2));
-  } catch (error) {
-    // ignore persistence errors
-  }
-};
-
-const getUserCartKey = (req) => {
-  const email = req.session && req.session.user ? req.session.user.email : "";
-  return email ? email.toLowerCase() : "";
-};
-
-const syncCartToStore = (req) => {
-  const key = getUserCartKey(req);
-  if (!key) {
-    return;
-  }
-  persistedCarts[key] = req.session && req.session.cart ? req.session.cart : { items: {} };
-  savePersistedCarts();
-};
-
-const loadCartFromStore = (req) => {
-  const key = getUserCartKey(req);
-  if (!key) {
-    return;
-  }
-  if (persistedCarts[key]) {
-    req.session.cart = persistedCarts[key];
-  }
-};
-
-loadPersistedCarts();
+// Cart data is stored on-chain via MarketplaceCart.
 
 const walletArtifactPath = path.join(__dirname, 'public', 'build', 'WalletContract.json');
 let walletContractAbi = null;
@@ -164,254 +122,15 @@ try {
   console.warn("Product catalog ABI not available:", error.message || error);
 }
 
-const mockProducts = [
-  {
-    id: "1",
-    productInfo: {
-      name: "Premium Wireless Headphones",
-      description: "Flagship wireless headphones with ANC and premium build.",
-      price: "299.99",
-      category: "Audio"
-    },
-    seller: {
-      name: "TechHub Singapore",
-      rating: 98.5,
-      sales: 1247,
-      verified: true
-    },
-    stock: 45,
-    status: "In Stock",
-    fullDescription:
-      "Experience superior sound quality with our flagship wireless headphones. Featuring active noise cancellation, 30-hour battery life, and premium build quality. These headphones deliver an immersive audio experience whether you're traveling, working, or relaxing.",
-    features: [
-      "Active Noise Cancellation (ANC) - Block out ambient noise",
-      "30-hour battery life on a single charge",
-      "Premium build quality with aluminum frame",
-      "Bluetooth 5.0 for stable, long-range connectivity",
-      "Comfortable memory foam ear cushions",
-      "Foldable design with premium carrying case",
-      "Multi-device pairing support",
-      "Touch controls for easy operation"
-    ],
-    images: [
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
-      "https://images.unsplash.com/photo-1484704849700-f032a568e944",
-      "https://images.unsplash.com/photo-1546435770-a3e426bf472b",
-      "https://images.unsplash.com/photo-1487215078519-e21cc028cb29"
-    ],
-    specifications: [
-      { label: "Brand", value: "AudioTech Pro" },
-      { label: "Model Number", value: "AT-PRO-3000" },
-      { label: "Color", value: "Midnight Black" },
-      { label: "Connectivity", value: "Bluetooth 5.0, 3.5mm jack" },
-      { label: "Battery Life", value: "30 hours (ANC on), 40 hours (ANC off)" },
-      { label: "Charging", value: "USB-C, Fast Charge (10min = 5hrs)" },
-      { label: "Weight", value: "250g" },
-      { label: "Warranty", value: "2 Years International Warranty" },
-      { label: "Driver Size", value: "40mm dynamic drivers" },
-      { label: "Frequency Response", value: "20Hz - 20kHz" },
-      { label: "Impedance", value: "32 Ohm" },
-      { label: "Noise Cancellation", value: "Hybrid ANC up to 30dB" }
-    ],
-    blockchain: {
-      smartContractId: "0x7a9f0b8c2d1a4e3f5b6c7d8e9f0a1b2c3d4e5f6a",
-      lastVerified: "Dec 1, 2025 08:30 AM"
-    },
-    rating: 4.8,
-    reviewCount: 2547
-  },
-  {
-    id: "2",
-    productInfo: {
-      name: "AirPods Pro Gen 2",
-      description: "Noise-canceling earbuds with spatial audio and long battery life.",
-      price: "0.18",
-      category: "Audio"
-    },
-    seller: {
-      name: "TrustedLedger Store",
-      rating: 96.4,
-      sales: 834,
-      verified: true
-    },
-    stock: 32,
-    status: "In Stock",
-    fullDescription:
-      "Compact premium earbuds with adaptive noise control, clear voice calls, and all-day comfort for travel or work.",
-    features: [
-      "Adaptive noise control",
-      "Spatial audio with head tracking",
-      "MagSafe charging case",
-      "Sweat and water resistant"
-    ],
-    images: ["/images/airpods.jpg"],
-    specifications: [
-      { label: "Battery", value: "Up to 6 hours (earbuds)" },
-      { label: "Case", value: "USB-C + wireless charging" },
-      { label: "Connectivity", value: "Bluetooth 5.x" },
-      { label: "Color", value: "White" }
-    ],
-    blockchain: {
-      smartContractId: "0x2f1d9a5d4b8e6c7a9012f3b4c5d6e7f8a9b0c1d2",
-      lastVerified: "Jan 21, 2026 11:05 AM"
-    },
-    rating: 4.7,
-    reviewCount: 1180
-  },
-  {
-    id: "3",
-    productInfo: {
-      name: "iPhone 15 Pro",
-      description: "Flagship smartphone with titanium frame and pro-grade camera.",
-      price: "0.92",
-      category: "Mobile"
-    },
-    seller: {
-      name: "TrustedLedger Store",
-      rating: 97.1,
-      sales: 642,
-      verified: true
-    },
-    stock: 18,
-    status: "In Stock",
-    fullDescription:
-      "A premium smartphone with a bright display, fast performance, and advanced camera system for creators.",
-    features: [
-      "A17 Pro performance",
-      "Pro camera system",
-      "Titanium design",
-      "All-day battery life"
-    ],
-    images: ["/images/iphone.jpg"],
-    specifications: [
-      { label: "Display", value: "6.1-inch OLED" },
-      { label: "Storage", value: "256GB" },
-      { label: "Camera", value: "48MP main" },
-      { label: "Color", value: "Natural Titanium" }
-    ],
-    blockchain: {
-      smartContractId: "0x9a8b7c6d5e4f3210a1b2c3d4e5f67890abcdef12",
-      lastVerified: "Jan 20, 2026 04:45 PM"
-    },
-    rating: 4.9,
-    reviewCount: 2096
-  },
-  {
-    id: "4",
-    productInfo: {
-      name: "Power Bank 20000mAh",
-      description: "High-capacity portable charger with fast USB-C output.",
-      price: "0.06",
-      category: "Accessories"
-    },
-    seller: {
-      name: "TrustedLedger Store",
-      rating: 95.2,
-      sales: 1543,
-      verified: true
-    },
-    stock: 60,
-    status: "In Stock",
-    fullDescription:
-      "Reliable travel power with dual outputs, fast charging, and LED battery indicators.",
-    features: [
-      "20000mAh capacity",
-      "USB-C PD fast charge",
-      "Dual output ports",
-      "LED battery display"
-    ],
-    images: ["/images/powerbank.jpg"],
-    specifications: [
-      { label: "Capacity", value: "20000mAh" },
-      { label: "Output", value: "USB-C PD + USB-A" },
-      { label: "Charging", value: "Fast charge support" },
-      { label: "Color", value: "Midnight Blue" }
-    ],
-    blockchain: {
-      smartContractId: "0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
-      lastVerified: "Jan 19, 2026 09:20 AM"
-    },
-    rating: 4.6,
-    reviewCount: 742
-  },
-  {
-    id: "5",
-    productInfo: {
-      name: "Supreme Water Blaster",
-      description: "Limited-run collector water blaster with Supreme branding.",
-      price: "0.12",
-      category: "Collectibles"
-    },
-    seller: {
-      name: "TrustedLedger Store",
-      rating: 94.8,
-      sales: 312,
-      verified: true
-    },
-    stock: 14,
-    status: "Limited Stock",
-    fullDescription:
-      "Streetwear-inspired collector item with premium packaging and verified authenticity.",
-    features: [
-      "Limited edition release",
-      "Authenticity verified",
-      "Premium packaging",
-      "Display-ready finish"
-    ],
-    images: ["/images/supreme.jpg"],
-    specifications: [
-      { label: "Edition", value: "Limited Run" },
-      { label: "Material", value: "ABS plastic" },
-      { label: "Color", value: "Red" },
-      { label: "Includes", value: "Display stand" }
-    ],
-    blockchain: {
-      smartContractId: "0x4a5b6c7d8e9f0123456789abcdefabcdefabcd",
-      lastVerified: "Jan 18, 2026 02:10 PM"
-    },
-    rating: 4.5,
-    reviewCount: 188
-  }
-];
-
-const mockReviews = [
-  {
-    id: "r1",
-    reviewerName: "Alicia T.",
-    rating: 5,
-    date: "2025-11-21",
-    title: "Best audio I have owned",
-    comment:
-      "Comfortable fit, deep bass, and crystal clear highs. The ANC is excellent for commuting.",
-    verifiedPurchase: true,
-    helpfulVotes: 24,
-    blockchainTxHash: "0x2f1b1b2a7c15a9c8b61a6cdd0d0be031f4ed5c0f2c2fa9e9c7a5c9c1a2b4f8e1"
-  },
-  {
-    id: "r2",
-    reviewerName: "Mika S.",
-    rating: 4,
-    date: "2025-11-10",
-    title: "Great sound, battery lasts",
-    comment:
-      "Battery easily lasts all week. Wish the carry case was a bit smaller.",
-    verifiedPurchase: true,
-    helpfulVotes: 12,
-    blockchainTxHash: "0x8a4c2f6c9d5e1f7a3b0e6c1d2a7f5c9b3e1a4c5f6b7d8e9f0a1b2c3d4e5f6a7"
-  },
-  {
-    id: "r3",
-    reviewerName: "Jordan K.",
-    rating: 5,
-    date: "2025-10-02",
-    title: "Premium feel and fast pairing",
-    comment:
-      "Connected instantly and the build quality feels top notch. Highly recommended.",
-    verifiedPurchase: false,
-    helpfulVotes: 5,
-    blockchainTxHash: "0x6b2f3a1c9d8e7f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1"
-  }
-];
+const cartArtifactPath = path.join(__dirname, 'public', 'build', 'MarketplaceCart.json');
+let cartContractAbi = null;
+let cartContractJson = null;
+try {
+  cartContractJson = JSON.parse(fs.readFileSync(cartArtifactPath, 'utf8'));
+  cartContractAbi = cartContractJson.abi;
+} catch (error) {
+  console.warn("Marketplace cart ABI not available:", error.message || error);
+}
 
 let products = [];
 
@@ -430,6 +149,23 @@ async function getProductContract() {
   }
 
   return new web3Instance.eth.Contract(productContractAbi, networkData.address);
+}
+
+async function getCartContract() {
+  if (!cartContractAbi || !cartContractJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = cartContractJson.networks
+    ? cartContractJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(cartContractAbi, networkData.address);
 }
 
 async function getReviewContract() {
@@ -485,30 +221,37 @@ async function getNotaryContract() {
 
 const buildProductDefaults = (overrides = {}) => {
   const now = new Date();
+  const stockValue = Number.isFinite(Number(overrides.stock)) ? Number(overrides.stock) : 0;
+  const statusText = overrides.status || (stockValue > 0 ? "In Stock" : "Out of Stock");
   return {
     seller: {
-      name: "TrustedLedger Store",
-      rating: 96.1,
+      name: overrides.sellerName || "On-chain seller",
+      rating: 0,
       sales: 0,
-      verified: true
+      verified: false
     },
-    stock: 20,
-    status: "In Stock",
+    stock: stockValue,
+    status: statusText,
     fullDescription:
+      overrides.fullDescription ||
       overrides.productInfo?.description ||
       "Verified marketplace listing anchored on-chain for authenticity and tracking.",
-    features: [
-      "Blockchain verified authenticity",
-      "Secure escrow-ready checkout",
-      "TrustedLedger seller assurance"
-    ],
+    features: overrides.features && overrides.features.length
+      ? overrides.features
+      : [
+          "Blockchain verified authenticity",
+          "Secure escrow-ready checkout",
+          "TrustedLedger seller assurance"
+        ],
     images: overrides.images && overrides.images.length
       ? overrides.images
       : ["/images/default-product.jpeg"],
-    specifications: [
-      { label: "Condition", value: "New" },
-      { label: "Warranty", value: "1 Year" }
-    ],
+    specifications: overrides.specifications && overrides.specifications.length
+      ? overrides.specifications
+      : [
+          { label: "Condition", value: "New" },
+          { label: "Warranty", value: "1 Year" }
+        ],
     blockchain: {
       smartContractId: overrides.contractAddress || "Pending deployment",
       lastVerified: now.toLocaleString("en-US", {
@@ -539,6 +282,28 @@ async function loadProductsFromChain() {
     const items = await Promise.all(
       ids.map(async (id) => {
         const data = await contract.methods.getProduct(id).call();
+        let features = [];
+        let specLabels = [];
+        let specValues = [];
+        try {
+          features = await contract.methods.getProductFeatures(id).call();
+        } catch (error) {
+          features = [];
+        }
+        try {
+          const specs = await contract.methods.getProductSpecifications(id).call();
+          specLabels = specs && specs[0] ? specs[0] : [];
+          specValues = specs && specs[1] ? specs[1] : [];
+        } catch (error) {
+          specLabels = [];
+          specValues = [];
+        }
+        const specifications = specLabels.map((label, index) => ({
+          label,
+          value: specValues[index] || ""
+        }));
+        const statusLabels = ["In Stock", "Limited Stock", "Out of Stock"];
+        const statusText = statusLabels[Number(data.status)] || "In Stock";
         const priceEth = web3Instance.utils.fromWei(data.priceWei || "0", "ether");
         const base = {
           id: id,
@@ -554,9 +319,16 @@ async function loadProductsFromChain() {
           ...buildProductDefaults({
             productInfo: base.productInfo,
             images: base.images,
-            contractAddress: contract.options.address
+            contractAddress: contract.options.address,
+            sellerName: data.sellerName,
+            stock: Number(data.stock || 0),
+            status: statusText,
+            fullDescription: data.fullDescription,
+            features: Array.isArray(features) ? features : [],
+            specifications
           }),
-          ...base
+          ...base,
+          sellerAddress: data.seller
         };
       })
     );
@@ -574,23 +346,48 @@ async function getProductsForView() {
   return products;
 }
 
-async function buildCartSummary(req) {
-  const liveProducts = await getProductsForView();
-  const cart = getCart(req);
-  const cartItems = Object.keys(cart.items)
-    .map((id) => {
-      const product = liveProducts.find((item) => item.id === id);
-      if (!product) {
+async function buildCartSnapshot(accountAddress) {
+  if (!accountAddress || !accountAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+    return { items: [], totalEth: "0.0000" };
+  }
+
+  const [cartContract, productContract] = await Promise.all([
+    getCartContract(),
+    getProductContract()
+  ]);
+
+  if (!cartContract || !productContract || !web3Instance) {
+    return { items: [], totalEth: "0.0000" };
+  }
+
+  const result = await cartContract.methods.getCart(accountAddress).call();
+  const ids = result && result[0] ? result[0] : [];
+  const quantities = result && result[1] ? result[1] : [];
+
+  const cartItems = await Promise.all(
+    ids.map(async (id, index) => {
+      const qty = Number(quantities[index] || 0);
+      if (!qty) {
         return null;
       }
-      return {
-        product,
-        quantity: cart.items[id]
+      const data = await productContract.methods.getProduct(id).call();
+      const priceEth = web3Instance.utils.fromWei(data.priceWei || "0", "ether");
+      const product = {
+        id,
+        productInfo: {
+          name: data.name,
+          description: data.description,
+          price: priceEth,
+          category: data.category
+        },
+        images: data.imageUrl ? [data.imageUrl] : ["/images/default-product.jpeg"]
       };
+      return { product, quantity: qty };
     })
-    .filter(Boolean);
+  );
 
-  const total = cartItems.reduce((sum, item) => {
+  const filteredItems = cartItems.filter(Boolean);
+  const total = filteredItems.reduce((sum, item) => {
     const price = Number(item.product.productInfo.price || 0);
     if (!Number.isFinite(price)) {
       return sum;
@@ -599,7 +396,7 @@ async function buildCartSummary(req) {
   }, 0);
 
   return {
-    cartItems,
+    items: filteredItems,
     totalEth: total.toFixed(4)
   };
 }
@@ -638,6 +435,27 @@ async function componentWillMount() {
   }
 }
 
+const getAllowedGanacheChainIds = () => {
+  const parsed = ganacheChainIds
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  const merged = new Set([...parsed, ...GANACHE_CHAIN_ID_FALLBACKS]);
+  return Array.from(merged);
+};
+
+async function assertGanacheNetwork(web3) {
+  if (!web3) {
+    throw new Error("Web3 not initialized");
+  }
+  const chainIdValue = await web3.eth.getChainId();
+  const chainId = Number(chainIdValue);
+  const allowedChainIds = getAllowedGanacheChainIds();
+  if (!allowedChainIds.includes(chainId)) {
+    throw new Error(`Ganache chainId required. Detected ${chainId}. Allowed: ${allowedChainIds.join(", ")}`);
+  }
+  return chainId;
+}
+
 async function loadWeb3() {
   if (!web3Instance) {
     web3Instance = new Web3(ganacheProviderUrl);
@@ -649,6 +467,7 @@ async function loadBlockchainData() {
     loading = true;
     await loadWeb3();
     const web3 = web3Instance;
+    await assertGanacheNetwork(web3);
 
     const contractJSON = JSON.parse(
       fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')
@@ -675,6 +494,56 @@ async function loadBlockchainData() {
   }
 }
 
+async function ensureContractInstance() {
+  if (contractInstance && web3Instance) {
+    return contractInstance;
+  }
+  await loadBlockchainData();
+  return contractInstance;
+}
+
+async function autoAdvanceShipments() {
+  if (!AUTO_STATUS_ENABLED) {
+    return;
+  }
+  if (!AUTO_STATUS_ACCOUNT || !AUTO_STATUS_ACCOUNT.match(/^0x[a-fA-F0-9]{40}$/)) {
+    return;
+  }
+  try {
+    await ensureContractInstance();
+    if (!contractInstance || !web3Instance) {
+      return;
+    }
+    const ids = await contractInstance.methods.getSellerShipments(sellerAddress).call();
+    if (!ids || !ids.length) {
+      return;
+    }
+    for (const trackingId of ids) {
+      const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+      const statusCode = Number(status[0]);
+      if (!Number.isFinite(statusCode) || statusCode >= 4) {
+        continue;
+      }
+      const nextStatus = statusCode + 1;
+      const tx = contractInstance.methods.updateShipmentStatus(
+        trackingId,
+        nextStatus,
+        "Automated status update",
+        "Auto progress"
+      );
+      const gasEstimate = await tx.estimateGas({ from: AUTO_STATUS_ACCOUNT });
+      const gasPrice = await getPreferredGasPrice();
+      await tx.send({
+        from: AUTO_STATUS_ACCOUNT,
+        gas: gasEstimate,
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice } : {})
+      });
+    }
+  } catch (error) {
+    console.error("Auto status update failed:", error.message || error);
+  }
+}
+
 function requireLogin(req, res, next) {
   if (req.session && req.session.user) {
     return next();
@@ -692,52 +561,11 @@ function requireAdmin(req, res, next) {
   return res.redirect("/admin-login");
 }
 
-function buildProductFromForm(body) {
-  const now = new Date();
-  const images = parseList(body.imageUrls);
-  const features = parseList(body.features);
-  const specifications = parseSpecs(body.specifications);
-  const priceValue = Number(body.price);
-  const stockValue = Number(body.stock);
-
-  return {
-    id: String(Date.now()),
-    productInfo: {
-      name: body.name.trim(),
-      description: body.description.trim(),
-      price: Number.isFinite(priceValue) ? priceValue.toFixed(2) : "0.00",
-      category: body.category ? body.category.trim() : "Verified"
-    },
-    seller: {
-      name: body.sellerName ? body.sellerName.trim() : "Marketplace Seller",
-      rating: 0,
-      sales: 0,
-      verified: false
-    },
-    stock: Number.isFinite(stockValue) ? stockValue : 0,
-    status: Number.isFinite(stockValue) && stockValue > 0 ? "In Stock" : "Out of Stock",
-    fullDescription: body.fullDescription ? body.fullDescription.trim() : body.description.trim(),
-    features: features.length ? features : ["Blockchain verified authenticity", "Secure marketplace escrow"],
-    images: images.length ? images : ["/images/default-product.jpeg"],
-    specifications: specifications.length
-      ? specifications
-      : [
-          { label: "Category", value: body.category || "Verified" },
-          { label: "Stock", value: String(stockValue || 0) }
-        ],
-    blockchain: {
-      smartContractId: "0x" + Math.random().toString(16).slice(2, 42).padEnd(40, "0"),
-      lastVerified: now.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      })
-    },
-    rating: 0,
-    reviewCount: 0
-  };
+function requireUser(req, res, next) {
+  if (req.session && req.session.user && req.session.user.role !== "admin") {
+    return next();
+  }
+  return res.redirect("/admin");
 }
 
 function resolveWalletContract() {
@@ -804,6 +632,37 @@ const isZeroQuantity = (value) => {
     return trimmed === "0" || trimmed === "0x0";
   }
   return false;
+};
+
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+const isZeroBytes32 = (value) => {
+  if (!value) {
+    return true;
+  }
+  return String(value).toLowerCase() === ZERO_BYTES32;
+};
+
+const toJsonSafe = (value) => {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  return value;
+};
+
+const toDeepJsonSafe = (value) => {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => toDeepJsonSafe(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, toDeepJsonSafe(val)])
+    );
+  }
+  return value;
 };
 
 const MAX_PRODUCT_PRICE_ETH = 15;
@@ -1042,7 +901,6 @@ app.post('/login', (req, res) => {
     email,
     role: role === "admin" ? "admin" : "user"
   };
-  loadCartFromStore(req);
 
   const redirectTo = typeof nextPath === "string" && nextPath ? nextPath : "/wallet";
   return res.redirect(redirectTo);
@@ -1069,12 +927,11 @@ app.post('/register', (req, res) => {
     email,
     role: "user"
   };
-  loadCartFromStore(req);
 
   return res.redirect('/wallet');
 });
 
-app.get('/wallet', requireLogin, async (req, res) => {
+app.get('/wallet', requireLogin, requireUser, async (req, res) => {
   try {
     const wallet = await buildWalletSnapshot(account);
     return res.render('wallet', { acct: account, wallet });
@@ -1113,6 +970,7 @@ app.get('/admin', requireAdmin, async (req, res) => {
 
 app.get('/api/orders', requireAdmin, async (req, res) => {
   try {
+    await ensureContractInstance();
     if (!contractInstance || !web3Instance) {
       return res.status(400).json({
         success: false,
@@ -1126,10 +984,25 @@ app.get('/api/orders', requireAdmin, async (req, res) => {
     }
 
     const statusLabels = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
+    const notaryContract = await getNotaryContract();
     const orders = await Promise.all(
       ids.map(async (trackingId) => {
         const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
         const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+        let orderMeta = null;
+        try {
+          orderMeta = await contractInstance.methods.getOrderMeta(trackingId).call();
+        } catch (error) {
+          orderMeta = null;
+        }
+        let invoice = null;
+        if (notaryContract) {
+          try {
+            invoice = await notaryContract.methods.getInvoice(trackingId).call();
+          } catch (error) {
+            invoice = null;
+          }
+        }
         return {
           trackingId,
           seller: shipmentData.seller,
@@ -1141,12 +1014,22 @@ app.get('/api/orders', requireAdmin, async (req, res) => {
           createdAt: new Date(parseInt(shipmentData.createdAt, 10) * 1000).toISOString(),
           statusCode: Number(status[0]),
           statusLabel: statusLabels[Number(status[0])] || "Pending",
-          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString()
+          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString(),
+          paymentTxHash: orderMeta && orderMeta[0] && !isZeroBytes32(orderMeta[0]) ? orderMeta[0] : "",
+          orderTotalWei: orderMeta && orderMeta[1] ? toJsonSafe(orderMeta[1]) : "0",
+          invoice: invoice
+            ? {
+                buyer: invoice.buyer || "",
+                invoiceHash: invoice.invoiceHash || "",
+                status: Number(invoice.status || 0),
+                timestamp: toJsonSafe(invoice.timestamp || "0")
+              }
+            : null
         };
       })
     );
 
-    return res.json({ success: true, orders });
+    return res.json(toDeepJsonSafe({ success: true, orders }));
   } catch (error) {
     console.error('Error loading orders:', error);
     return res.status(500).json({
@@ -1158,6 +1041,7 @@ app.get('/api/orders', requireAdmin, async (req, res) => {
 
 app.get('/api/orders/user', requireLogin, async (req, res) => {
   try {
+    await ensureContractInstance();
     if (!contractInstance || !web3Instance) {
       return res.status(400).json({
         success: false,
@@ -1165,23 +1049,39 @@ app.get('/api/orders/user', requireLogin, async (req, res) => {
       });
     }
 
-    if (!account) {
+    const buyerAccount = String(req.query.account || account || "").trim();
+    if (!buyerAccount || !buyerAccount.match(/^0x[a-fA-F0-9]{40}$/)) {
       return res.status(400).json({
         success: false,
         message: 'No MetaMask account connected'
       });
     }
 
-    const ids = await contractInstance.methods.getBuyerShipments(account).call();
+    const ids = await contractInstance.methods.getBuyerShipments(buyerAccount).call();
     if (!ids || !ids.length) {
       return res.json({ success: true, orders: [] });
     }
 
     const statusLabels = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
+    const notaryContract = await getNotaryContract();
     const orders = await Promise.all(
       ids.map(async (trackingId) => {
         const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
         const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+        let orderMeta = null;
+        try {
+          orderMeta = await contractInstance.methods.getOrderMeta(trackingId).call();
+        } catch (error) {
+          orderMeta = null;
+        }
+        let invoice = null;
+        if (notaryContract) {
+          try {
+            invoice = await notaryContract.methods.getInvoice(trackingId).call();
+          } catch (error) {
+            invoice = null;
+          }
+        }
         return {
           trackingId,
           seller: shipmentData.seller,
@@ -1193,17 +1093,381 @@ app.get('/api/orders/user', requireLogin, async (req, res) => {
           createdAt: new Date(parseInt(shipmentData.createdAt, 10) * 1000).toISOString(),
           statusCode: Number(status[0]),
           statusLabel: statusLabels[Number(status[0])] || "Pending",
-          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString()
+          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString(),
+          paymentTxHash: orderMeta && orderMeta[0] && !isZeroBytes32(orderMeta[0]) ? orderMeta[0] : "",
+          orderTotalWei: orderMeta && orderMeta[1] ? toJsonSafe(orderMeta[1]) : "0",
+          invoice: invoice
+            ? {
+                buyer: invoice.buyer || "",
+                invoiceHash: invoice.invoiceHash || "",
+                status: Number(invoice.status || 0),
+                timestamp: toJsonSafe(invoice.timestamp || "0")
+              }
+            : null
         };
       })
     );
 
-    return res.json({ success: true, orders });
+    return res.json(toDeepJsonSafe({ success: true, orders }));
   } catch (error) {
     console.error('Error loading user orders:', error);
     return res.status(500).json({
       success: false,
       message: error.message || 'Unable to load orders'
+    });
+  }
+});
+
+app.get('/api/orders/:trackingId', requireLogin, async (req, res) => {
+  try {
+    const trackingId = String(req.params.trackingId || "");
+    if (!trackingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'TrackingId required'
+      });
+    }
+    await ensureContractInstance();
+    if (!contractInstance || !web3Instance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+    const productContract = await getProductContract();
+    const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
+    let orderItems = [];
+    try {
+      const detailed = await contractInstance.methods.getOrderItemDetails(trackingId).call();
+      if (Array.isArray(detailed) && detailed.length) {
+        orderItems = detailed.map((item) => ({
+          productId: item.productId,
+          quantity: Number(item.quantity || 0),
+          name: item.name || "",
+          priceWei: item.priceWei || "0",
+          imageUrl: item.imageUrl || ""
+        }));
+      }
+    } catch (error) {
+      orderItems = [];
+    }
+
+    if (!orderItems.length) {
+      try {
+        const orderItemData = await contractInstance.methods.getOrderItems(trackingId).call();
+        const productIds = orderItemData && orderItemData[0] ? orderItemData[0] : [];
+        const quantities = orderItemData && orderItemData[1] ? orderItemData[1] : [];
+        if (productContract) {
+          orderItems = await Promise.all(
+            productIds.map(async (productId, index) => {
+              const qty = Number(quantities[index] || 0);
+              const product = await productContract.methods.getProduct(productId).call();
+              return {
+                productId,
+                quantity: qty,
+                name: product.name || "",
+                priceWei: product.priceWei || "0",
+                imageUrl: product.imageUrl || ""
+              };
+            })
+          );
+        } else {
+          orderItems = productIds.map((productId, index) => ({
+            productId,
+            quantity: Number(quantities[index] || 0),
+            name: "",
+            priceWei: "0",
+            imageUrl: ""
+          }));
+        }
+      } catch (error) {
+        orderItems = [];
+      }
+    }
+
+    let orderMeta = null;
+    try {
+      orderMeta = await contractInstance.methods.getOrderMeta(trackingId).call();
+    } catch (error) {
+      orderMeta = null;
+    }
+
+    return res.json(toDeepJsonSafe({
+      success: true,
+      trackingId,
+      shipment: shipmentData,
+      orderItems,
+      paymentTxHash: orderMeta && orderMeta[0] && !isZeroBytes32(orderMeta[0]) ? orderMeta[0] : "",
+      orderTotalWei: orderMeta && orderMeta[1] ? toJsonSafe(orderMeta[1]) : "0"
+    }));
+  } catch (error) {
+    console.error('Error loading order details:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load order'
+    });
+  }
+});
+
+app.post('/api/orders/tx/payment', requireLogin, express.json(), async (req, res) => {
+  try {
+    const { trackingId, paymentTxHash, account: from } = req.body || {};
+    if (!trackingId || !paymentTxHash) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing trackingId or paymentTxHash'
+      });
+    }
+    if (!contractInstance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+    const hashValue = String(paymentTxHash).startsWith("0x")
+      ? String(paymentTxHash)
+      : `0x${String(paymentTxHash)}`;
+    const tx = contractInstance.methods.recordPaymentTransaction(trackingId, hashValue);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: contractInstance.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing payment tx record:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
+app.get('/api/cart', requireLogin, requireUser, async (req, res) => {
+  try {
+    const accountAddress = String(req.query.account || account || "").trim();
+    if (!accountAddress || !accountAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid account address'
+      });
+    }
+    const snapshot = await buildCartSnapshot(accountAddress);
+    return res.json({
+      success: true,
+      items: snapshot.items,
+      totalEth: snapshot.totalEth
+    });
+  } catch (error) {
+    console.error('Error loading cart:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load cart'
+    });
+  }
+});
+
+app.post('/api/cart/tx/add', requireLogin, requireUser, express.json(), async (req, res) => {
+  try {
+    const { productId, quantity, account: from } = req.body || {};
+    const cartContract = await getCartContract();
+    if (!cartContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cart contract not available'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID required'
+      });
+    }
+    const qty = Number(quantity || 1);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be greater than 0'
+      });
+    }
+
+    const tx = cartContract.methods.addToCart(productId, qty);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: cartContract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing cart add:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare cart transaction'
+    });
+  }
+});
+
+app.post('/api/cart/tx/update', requireLogin, requireUser, express.json(), async (req, res) => {
+  try {
+    const { productId, quantity, account: from } = req.body || {};
+    const cartContract = await getCartContract();
+    if (!cartContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cart contract not available'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID required'
+      });
+    }
+    const qty = Number(quantity || 0);
+    if (!Number.isFinite(qty) || qty < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be 0 or higher'
+      });
+    }
+
+    const tx = cartContract.methods.updateQuantity(productId, qty);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: cartContract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing cart update:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare cart transaction'
+    });
+  }
+});
+
+app.post('/api/cart/tx/remove', requireLogin, requireUser, express.json(), async (req, res) => {
+  try {
+    const { productId, account: from } = req.body || {};
+    const cartContract = await getCartContract();
+    if (!cartContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cart contract not available'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID required'
+      });
+    }
+
+    const tx = cartContract.methods.removeFromCart(productId);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: cartContract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing cart remove:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare cart transaction'
+    });
+  }
+});
+
+app.post('/api/cart/tx/clear', requireLogin, requireUser, express.json(), async (req, res) => {
+  try {
+    const { account: from } = req.body || {};
+    const cartContract = await getCartContract();
+    if (!cartContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cart contract not available'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+
+    const tx = cartContract.methods.clearCart();
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: cartContract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing cart clear:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare cart transaction'
     });
   }
 });
@@ -1235,11 +1499,22 @@ app.get('/api/reviews/:productId', async (req, res) => {
   }
 });
 
-app.get('/documents', requireLogin, (req, res) => {
+app.get('/documents', requireLogin, requireUser, (req, res) => {
   res.render('documents', { acct: account });
 });
 
-app.get('/orders', requireLogin, (req, res) => {
+app.get('/documents/verified', requireLogin, requireUser, (req, res) => {
+  const status = String(req.query.status || "").toLowerCase();
+  const trackingId = String(req.query.trackingId || "");
+  const isSuccess = status === "approved";
+  res.render('invoice-status', {
+    acct: account,
+    trackingId,
+    status: isSuccess ? "approved" : "rejected"
+  });
+});
+
+app.get('/orders', requireLogin, requireUser, (req, res) => {
   res.render('orders', { acct: account });
 });
 
@@ -1283,14 +1558,18 @@ app.get('/product/:id', async (req, res) => {
   try {
     const reviewContract = await getReviewContract();
     if (reviewContract) {
-      const onChainReviews = await reviewContract.methods.getReviews(product.id).call();
-      reviews = (onChainReviews || []).map((review) => {
+      const [onChainReviews, reviewIds] = await Promise.all([
+        reviewContract.methods.getReviews(product.id).call(),
+        reviewContract.methods.getReviewIds(product.id).call()
+      ]);
+      reviews = (onChainReviews || []).map((review, index) => {
         const ratingValue = Number(review.rating || 0);
         if (ratingValue >= 1 && ratingValue <= 5) {
           ratingCounts[ratingValue] += 1;
         }
         const buyer = String(review.buyer || "");
         return {
+          reviewId: reviewIds && reviewIds[index] !== undefined ? Number(reviewIds[index]) : index,
           reviewerName: buyer ? `${buyer.slice(0, 6)}...${buyer.slice(-4)}` : "On-chain buyer",
           rating: ratingValue,
           date: new Date(Number(review.timestamp) * 1000).toLocaleDateString("en-GB"),
@@ -1299,21 +1578,18 @@ app.get('/product/:id', async (req, res) => {
           photoHash: review.photoHash || "",
           verifiedPurchase: true,
           helpfulVotes: 0,
-          blockchainTxHash: review.deliveryTxHash || "0x"
+          blockchainTxHash: review.deliveryTxHash || "0x",
+          adminReply: review.adminReply || "",
+          replyTimestamp: review.replyTimestamp ? Number(review.replyTimestamp) : 0,
+          replyAuthor: review.replyAuthor || ""
         };
       });
     } else {
-      reviews = mockReviews;
-      reviews.forEach((review) => {
-        ratingCounts[review.rating] += 1;
-      });
+      reviews = [];
     }
   } catch (error) {
     console.warn("Unable to load on-chain reviews:", error.message || error);
-    reviews = mockReviews;
-    reviews.forEach((review) => {
-      ratingCounts[review.rating] += 1;
-    });
+    reviews = [];
   }
 
   const totalReviews = reviews.length || 1;
@@ -1331,7 +1607,8 @@ app.get('/product/:id', async (req, res) => {
   try {
     const reputationContract = await getReputationContract();
     if (reputationContract) {
-      const rep = await reputationContract.methods.getSellerReputation(sellerAddress).call();
+      const repTarget = product.sellerAddress || sellerAddress;
+      const rep = await reputationContract.methods.getSellerReputation(repTarget).call();
       const percent = Number(rep.reputationPercent || 0);
       sellerReputation = {
         percent,
@@ -1362,7 +1639,19 @@ app.get('/product/:id', async (req, res) => {
 
 app.post('/api/products/tx/create', requireAdmin, express.json(), async (req, res) => {
   try {
-    const { name, description, price, imageUrl, category, account: from } = req.body;
+    const {
+      name,
+      description,
+      price,
+      imageUrl,
+      category,
+      account: from,
+      sellerName,
+      stock,
+      fullDescription,
+      features,
+      specifications
+    } = req.body;
     const contract = await getProductContract();
 
     if (!contract || !web3Instance) {
@@ -1386,6 +1675,15 @@ app.post('/api/products/tx/create', requireAdmin, express.json(), async (req, re
       });
     }
 
+    const featureList = parseList(features);
+    const specList = parseSpecs(specifications);
+    const specLabels = specList.map((spec) => spec.label);
+    const specValues = specList.map((spec) => spec.value);
+    const stockValue = Number(stock || 0);
+    const statusValue = Number.isFinite(stockValue)
+      ? (stockValue === 0 ? 2 : stockValue <= 5 ? 1 : 0)
+      : 0;
+
     const priceValue = Number(price);
     if (!Number.isFinite(priceValue) || priceValue <= 0) {
       return res.status(400).json({
@@ -1407,13 +1705,23 @@ app.post('/api/products/tx/create', requireAdmin, express.json(), async (req, re
     );
     const cleanImage = imageUrl || '/images/default-product.jpeg';
     const cleanCategory = category || 'Verified';
+    const resolvedSellerName = sellerName || "TrustedLedger Store";
+    const resolvedFullDescription = fullDescription || description;
     const tx = contract.methods.addProduct(
       productId,
       name,
       description,
       cleanImage,
       cleanCategory,
-      priceWei
+      priceWei,
+      from,
+      resolvedSellerName,
+      Number.isFinite(stockValue) ? stockValue : 0,
+      statusValue,
+      resolvedFullDescription,
+      featureList.length ? featureList : ["Blockchain verified authenticity", "Secure escrow-ready checkout"],
+      specLabels.length ? specLabels : ["Condition", "Warranty"],
+      specValues.length ? specValues : ["New", "1 Year"]
     );
     const gasEstimate = await tx.estimateGas({ from });
     const gasPrice = await getPreferredGasPrice();
@@ -1492,64 +1800,33 @@ app.get("/shipping/tracker", requireLogin, (req, res) => {
   res.render("tracking", { acct: account });
 });
 
-function getCart(req) {
-  if (!req.session.cart) {
-    req.session.cart = { items: {} };
-  }
-  return req.session.cart;
-}
-
-app.post('/cart/add', requireLogin, async (req, res) => {
-  const { productId, quantity } = req.body;
-  const liveProducts = await getProductsForView();
-  const product = liveProducts.find((item) => item.id === productId);
-  if (!product) {
-    return res.status(404).send('Product not found');
-  }
-
-  const qty = Math.max(1, Number.parseInt(quantity || '1', 10));
-  const cart = getCart(req);
-  cart.items[productId] = (cart.items[productId] || 0) + qty;
-  req.session.cart = cart;
-  syncCartToStore(req);
-  return res.redirect('/cart');
+app.post('/cart/add', requireLogin, requireUser, (req, res) => {
+  return res.status(400).send('Use the on-chain cart flow with MetaMask.');
 });
 
-app.get('/cart', requireLogin, async (req, res) => {
-  const { cartItems, totalEth } = await buildCartSummary(req);
-
+app.get('/cart', requireLogin, requireUser, (req, res) => {
   res.render('cart', {
     acct: account,
-    cartItems: cartItems,
-    totalEth: totalEth
+    cartItems: [],
+    totalEth: "0.0000"
   });
 });
 
-app.get('/checkout', requireLogin, async (req, res) => {
-  const { cartItems, totalEth } = await buildCartSummary(req);
+app.get('/checkout', requireLogin, requireUser, (req, res) => {
   res.render('checkout', {
     acct: account,
-    cartItems,
-    totalEth,
+    cartItems: [],
+    totalEth: "0.0000",
     userEmail: req.session && req.session.user ? req.session.user.email : null
   });
 });
 
-app.post('/cart/remove', requireLogin, (req, res) => {
-  const { productId } = req.body;
-  const cart = getCart(req);
-  if (productId && cart.items[productId]) {
-    delete cart.items[productId];
-  }
-  req.session.cart = cart;
-  syncCartToStore(req);
-  return res.redirect('/cart');
+app.post('/cart/remove', requireLogin, requireUser, (req, res) => {
+  return res.status(400).send('Use the on-chain cart flow with MetaMask.');
 });
 
-app.post('/cart/clear', requireLogin, (req, res) => {
-  req.session.cart = { items: {} };
-  syncCartToStore(req);
-  return res.redirect('/cart');
+app.post('/cart/clear', requireLogin, requireUser, (req, res) => {
+  return res.status(400).send('Use the on-chain cart flow with MetaMask.');
 });
 
 // Initialize Web3 connection and contract
@@ -1588,8 +1865,9 @@ app.post('/web3Connect', express.json(), async (req, res) => {
     
     // Initialize Web3 if not already done
     // For MetaMask: use window.ethereum provider from frontend, or fall back to http provider
-    const resolvedProviderUrl = providerUrl || WEB3_PROVIDER_URL || 'http://localhost:8545';
+    const resolvedProviderUrl = providerUrl || ganacheProviderUrl || WEB3_PROVIDER_URL || 'http://localhost:8545';
     web3Instance = new Web3(resolvedProviderUrl);
+    await assertGanacheNetwork(web3Instance);
     
     let resolvedContractAddress = contractAddress;
     let contractJSON = null;
@@ -1690,13 +1968,27 @@ app.post('/createShipment', express.json(), async (req, res) => {
       recipientAddress,
       itemDescription,
       shipmentValue,
-      useCartTotal
+      useCartTotal,
+      productIds,
+      quantities,
+      productNames,
+      productImages,
+      productPrices,
+      account: fromAccount
     } = req.body;
     
     if (!contractInstance) {
       return res.status(400).json({
         success: false,
         message: 'Web3 not connected'
+      });
+    }
+
+    const from = fromAccount || account;
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid buyer account'
       });
     }
     
@@ -1710,15 +2002,57 @@ app.post('/createShipment', express.json(), async (req, res) => {
     
     // Resolve shipment value from cart when requested
     let resolvedShipmentValue = shipmentValue;
+    let resolvedProductIds = Array.isArray(productIds) ? productIds : [];
+    let resolvedQuantities = Array.isArray(quantities) ? quantities : [];
+    let resolvedNames = Array.isArray(productNames) ? productNames : [];
+    let resolvedImages = Array.isArray(productImages) ? productImages : [];
+    let resolvedPrices = Array.isArray(productPrices) ? productPrices : [];
     if (useCartTotal) {
-      const summary = await buildCartSummary(req);
-      if (!summary.cartItems || summary.cartItems.length === 0) {
+      const snapshot = await buildCartSnapshot(from);
+      if (!snapshot.items || snapshot.items.length === 0) {
         return res.status(400).json({
           success: false,
           message: 'Cart is empty'
         });
       }
-      resolvedShipmentValue = summary.totalEth;
+      resolvedShipmentValue = snapshot.totalEth;
+      resolvedProductIds = snapshot.items.map((item) => item.product.id);
+      resolvedQuantities = snapshot.items.map((item) => Number(item.quantity || 0));
+      resolvedNames = snapshot.items.map((item) => item.product.productInfo.name || "");
+      resolvedImages = snapshot.items.map((item) => {
+        const images = item.product.images || [];
+        return images.length ? images[0] : "";
+      });
+      resolvedPrices = snapshot.items.map((item) => {
+        const priceEth = Number(item.product.productInfo.price || 0);
+        return Number.isFinite(priceEth)
+          ? web3Instance.utils.toWei(String(priceEth), "ether")
+          : "0";
+      });
+    }
+
+    const normalizeWeiValue = (value) => {
+      if (value === null || value === undefined) {
+        return "0";
+      }
+      const str = String(value).trim();
+      if (!str) {
+        return "0";
+      }
+      if (str.startsWith("0x")) {
+        return str;
+      }
+      if (str.includes(".")) {
+        return web3Instance.utils.toWei(str, "ether");
+      }
+      if (/^\d+$/.test(str)) {
+        return str;
+      }
+      return "0";
+    };
+
+    if (resolvedPrices.length) {
+      resolvedPrices = resolvedPrices.map((value) => normalizeWeiValue(value));
     }
 
     const shipmentValueNum = parseFloat(resolvedShipmentValue);
@@ -1745,23 +2079,45 @@ app.post('/createShipment', express.json(), async (req, res) => {
       ? recipientAddress.trim()
       : "Address on file";
 
-    const tx = contractInstance.methods.createShipment(
-      trackingId,
-      senderName,
-      senderAddress,
-      safeRecipientName,
-      safeRecipientAddress,
-      itemDescription,
-      web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether')
-    );
+    let tx;
+    if (resolvedProductIds.length
+      && resolvedProductIds.length === resolvedQuantities.length
+      && resolvedProductIds.length === resolvedNames.length
+      && resolvedProductIds.length === resolvedImages.length
+      && resolvedProductIds.length === resolvedPrices.length) {
+      tx = contractInstance.methods.createShipmentWithItemDetails(
+        trackingId,
+        senderName,
+        senderAddress,
+        safeRecipientName,
+        safeRecipientAddress,
+        itemDescription,
+        web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether'),
+        resolvedProductIds,
+        resolvedQuantities,
+        resolvedNames,
+        resolvedImages,
+        resolvedPrices
+      );
+    } else {
+      tx = contractInstance.methods.createShipment(
+        trackingId,
+        senderName,
+        senderAddress,
+        safeRecipientName,
+        safeRecipientAddress,
+        itemDescription,
+        web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether')
+      );
+    }
     
     // Prepare transaction for MetaMask
     const value = web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether');
-    const gasEstimate = await tx.estimateGas({ from: account, value: value });
+    const gasEstimate = await tx.estimateGas({ from: from, value: value });
     const gasPrice = await getPreferredGasPrice();
     
     const txData = {
-      from: account,
+      from: from,
       to: contractInstance.options.address,
       data: tx.encodeABI(),
       value: toHexQuantity(value),
@@ -2158,6 +2514,55 @@ app.post('/api/reviews/tx', express.json(), async (req, res) => {
   }
 });
 
+app.post('/api/reviews/reply/tx', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { reviewId, reply, account: from } = req.body || {};
+    if (reviewId === undefined || reviewId === null || reply === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing reviewId or reply'
+      });
+    }
+
+    const reviewContract = await getReviewContract();
+    if (!reviewContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Review contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    const tx = reviewContract.methods.replyToReview(Number(reviewId), String(reply));
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    return res.json({
+      success: true,
+      message: 'Reply transaction prepared',
+      txData: {
+        from,
+        to: reviewContract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing review reply tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare reply transaction'
+    });
+  }
+});
+
 // Prepare seller reputation update transaction
 app.post('/api/reputation/tx', express.json(), async (req, res) => {
   try {
@@ -2222,11 +2627,17 @@ app.post('/api/reputation/tx', express.json(), async (req, res) => {
 
 app.post('/api/invoices/tx/register', express.json(), async (req, res) => {
   try {
-    const { trackingId, invoiceHash } = req.body || {};
+    const { trackingId, invoiceHash, account: from } = req.body || {};
     if (!trackingId || !invoiceHash) {
       return res.status(400).json({
         success: false,
         message: 'Missing trackingId or invoiceHash'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
       });
     }
 
@@ -2243,11 +2654,11 @@ app.post('/api/invoices/tx/register', express.json(), async (req, res) => {
       : `0x${String(invoiceHash)}`;
 
     const tx = notaryContract.methods.registerInvoice(trackingId, hashValue);
-    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasEstimate = await tx.estimateGas({ from });
     const gasPrice = await web3Instance.eth.getGasPrice();
 
     const txData = {
-      from: account,
+      from: from,
       to: notaryContract.options.address,
       data: tx.encodeABI(),
       gas: toHexQuantity(gasEstimate),
@@ -2270,11 +2681,17 @@ app.post('/api/invoices/tx/register', express.json(), async (req, res) => {
 
 app.post('/api/invoices/tx/attest', requireAdmin, express.json(), async (req, res) => {
   try {
-    const { trackingId, authentic } = req.body || {};
+    const { trackingId, authentic, account: from } = req.body || {};
     if (!trackingId || authentic === undefined) {
       return res.status(400).json({
         success: false,
         message: 'Missing trackingId or authentic flag'
+      });
+    }
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
       });
     }
 
@@ -2287,11 +2704,11 @@ app.post('/api/invoices/tx/attest', requireAdmin, express.json(), async (req, re
     }
 
     const tx = notaryContract.methods.attestInvoice(trackingId, Boolean(authentic));
-    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasEstimate = await tx.estimateGas({ from });
     const gasPrice = await web3Instance.eth.getGasPrice();
 
     const txData = {
-      from: account,
+      from: from,
       to: notaryContract.options.address,
       data: tx.encodeABI(),
       gas: toHexQuantity(gasEstimate),
@@ -2340,16 +2757,29 @@ app.post('/api/invoices/verify', upload.single('invoice'), async (req, res) => {
     const onChain = await notaryContract.methods.getInvoice(trackingId).call();
     const chainHash = String(onChain.invoiceHash || "").toLowerCase();
     const submittedHash = `0x${hashHex}`.toLowerCase();
-    const authentic = chainHash && chainHash !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+    let purchaseValid = false;
+    if (contractInstance) {
+      try {
+        const shipment = await contractInstance.methods.getShipment(trackingId).call();
+        purchaseValid = shipment && shipment.buyer
+          ? String(shipment.buyer).toLowerCase() === String(onChain.buyer || "").toLowerCase()
+          : false;
+      } catch (error) {
+        purchaseValid = false;
+      }
+    }
+    const hashMatches = chainHash && chainHash !== ZERO_BYTES32
       ? chainHash === submittedHash
       : false;
+    const authentic = hashMatches && purchaseValid;
 
     return res.json({
       success: true,
       authentic,
       invoiceHash: submittedHash,
       chainHash,
-      status: Number(onChain.status || 0)
+      status: Number(onChain.status || 0),
+      purchaseValid
     });
   } catch (error) {
     console.error('Error verifying invoice:', error);

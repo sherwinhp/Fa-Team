@@ -155,6 +155,14 @@
         return "status-pending";
       };
 
+      const invoiceLabel = (invoice) => {
+        if (!invoice) return "Not registered";
+        const status = Number(invoice.status || 0);
+        if (status === 1) return "Approved";
+        if (status === 2) return "Rejected";
+        return "Pending";
+      };
+
       const renderOrders = (orders) => {
         if (!ordersList) return;
         if (!orders || !orders.length) {
@@ -165,6 +173,9 @@
         }
         ordersList.innerHTML = orders.map((order) => {
           const date = order.createdAt ? new Date(order.createdAt).toLocaleString() : "Unknown";
+          const reviewButton = order.statusLabel === "Delivered"
+            ? `<a class="btn" style="background:#10b981;" href="/shipping/tracker?trackingId=${encodeURIComponent(order.trackingId)}&review=1#review">Leave Review</a>`
+            : "";
           return `
             <div class="row">
               <div>
@@ -176,8 +187,14 @@
                 <div class="muted">Placed: ${date}</div>
                 <div class="muted">Seller: ${order.seller}</div>
                 <div class="muted">Amount: ${order.shipmentValue} ETH</div>
+                <div class="muted">Payment Tx: ${order.paymentTxHash ? order.paymentTxHash : "Pending"}</div>
+                <div class="muted">Invoice: ${invoiceLabel(order.invoice)}</div>
               </div>
-              <a class="btn" href="/shipping/tracker?trackingId=${encodeURIComponent(order.trackingId)}">Track</a>
+              <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+                <a class="btn" href="/shipping/tracker?trackingId=${encodeURIComponent(order.trackingId)}">Track</a>
+                <a class="btn" style="background:#fff;color:#2563eb;border:1px solid #cbd5f5;" href="/documents?trackingId=${encodeURIComponent(order.trackingId)}">Invoice</a>
+                ${reviewButton}
+              </div>
             </div>
           `;
         }).join("");
@@ -186,7 +203,9 @@
       const loadOrders = async () => {
         if (!ordersList) return;
         try {
-          const res = await fetch("/api/orders/user");
+          const account = window.appWallet ? window.appWallet.getAccount() : "";
+          const accountParam = account ? `?account=${encodeURIComponent(account)}` : "";
+          const res = await fetch(`/api/orders/user${accountParam}`);
           const payload = await res.json();
           if (!res.ok || !payload.success) {
             ordersList.innerHTML = `

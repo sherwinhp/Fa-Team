@@ -260,12 +260,6 @@
         display: contents;
       }
 
-      .order-status {
-        margin-top: 10px;
-        font-size: 13px;
-        color: var(--gray-600);
-      }
-
       .login-required {
         grid-column: 1 / -1;
         border: 1px dashed var(--gray-200);
@@ -311,38 +305,6 @@
         margin-top: 32px;
       }
 
-      .tabs-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        border-bottom: 1px solid var(--gray-200);
-      }
-
-      .tab-btn {
-        background: transparent;
-        border: none;
-        padding: 12px 16px;
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--gray-600);
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-      }
-
-      .tab-btn.active {
-        color: var(--blue-700);
-        border-bottom-color: var(--blue-600);
-      }
-
-      .tab-content {
-        display: none;
-        padding: 24px 0 10px;
-      }
-
-      .tab-content.active {
-        display: block;
-      }
-
       .section-title {
         display: flex;
         align-items: center;
@@ -362,33 +324,6 @@
         align-items: flex-start;
         gap: 10px;
         color: var(--gray-700);
-      }
-
-      .spec-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-        border: 1px solid var(--gray-200);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      .spec-table td {
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--gray-200);
-        font-size: 14px;
-        color: var(--gray-600);
-      }
-
-      .spec-table tr:nth-child(even) {
-        background: var(--gray-50);
-      }
-
-      .spec-table td:first-child {
-        font-weight: 600;
-        color: var(--gray-700);
-        width: 35%;
-        border-right: 1px solid var(--gray-200);
       }
 
       .blockchain-card {
@@ -633,14 +568,8 @@
 
           <div class="actions">
             <% if (isLoggedIn) { %>
-              <form class="action-form" method="post" action="/cart/add">
-                <input type="hidden" name="productId" value="<%= product.id %>">
-                <input type="hidden" name="quantity" value="1">
-                <button class="btn" type="submit">Add to Cart</button>
-              </form>
+              <button class="btn" id="addToCartButton" type="button" data-product-id="<%= product.id %>">Add to Cart</button>
               <button class="btn primary" id="buyNowButton" type="button">Buy Now</button>
-              <button class="btn" type="button">Pay with QR</button>
-              <button class="btn" id="trackOrderButton" type="button">Track Order</button>
             <% } else { %>
               <div class="login-required">
                 <span>Log in to purchase, pay, or track orders.</span>
@@ -648,24 +577,11 @@
               </div>
             <% } %>
           </div>
-          <% if (isLoggedIn) { %>
-            <div class="order-status" id="orderStatus">No active order yet.</div>
-          <% } %>
         </div>
       </section>
 
       <section class="tabs">
-        <div class="tabs-list" role="tablist">
-          <button class="tab-btn active" data-tab="description" type="button" role="tab">Description</button>
-          <button class="tab-btn" data-tab="reviews" type="button" role="tab">
-            Reviews
-            <span class="badge" style="margin-left: 8px; border-color: var(--blue-100); background: #f3f4ff; color: var(--blue-700);">2.5K</span>
-          </button>
-          <button class="tab-btn" data-tab="shipping" type="button" role="tab">Shipping &amp; Tracking</button>
-          <button class="tab-btn" data-tab="specs" type="button" role="tab">Specifications</button>
-        </div>
-
-        <div class="tab-content active" data-tab-content="description" role="tabpanel">
+        <div class="tab-content active" role="tabpanel">
           <div class="section-title">
             <span aria-hidden="true">Product Description</span>
           </div>
@@ -712,7 +628,7 @@
           </div>
         </div>
 
-        <div class="tab-content" data-tab-content="reviews" role="tabpanel">
+        <div class="tab-content active" role="tabpanel">
           <div class="reviews-grid">
             <div class="rating-summary">
               <div class="score"><%= Number(averageRating || 0).toFixed(1) %></div>
@@ -738,8 +654,8 @@
             </div>
           </div>
 
-          <div style="margin-bottom: 16px;">
-            <button class="btn primary" type="button">Write a Review</button>
+          <div style="margin-bottom: 16px; color: var(--gray-500); font-size: 13px;">
+            Reviews can only be submitted after delivery is completed. Use the Orders page to leave a review.
           </div>
 
           <% if (!reviews || !reviews.length) { %>
@@ -805,35 +721,21 @@
               <div class="tx-hash">
                 Transaction: <%= review.blockchainTxHash.slice(0, 22) %>...
               </div>
+
+              <% if (review.adminReply) { %>
+                <div class="review-card" style="margin-top:12px;background:#f8fafc;">
+                  <div style="font-weight:600;">Admin Reply</div>
+                  <div style="color: var(--gray-700); margin-top: 6px;"><%= review.adminReply %></div>
+                </div>
+              <% } else if (userRole === 'admin') { %>
+                <div style="margin-top: 12px;">
+                  <label style="font-size: 12px; color: var(--gray-500);">Admin Reply</label>
+                  <textarea class="admin-reply-input" data-review-id="<%= review.reviewId %>" rows="2" style="width:100%;border-radius:10px;border:1px solid var(--gray-200);padding:8px;margin-top:6px;"></textarea>
+                  <button class="btn" type="button" data-reply-submit="<%= review.reviewId %>" style="margin-top:8px;">Send Reply</button>
+                </div>
+              <% } %>
             </div>
           <% }) %>
-        </div>
-
-        <div class="tab-content" data-tab-content="shipping" role="tabpanel">
-          <div class="shipping-box">
-            <h3 style="margin: 0 0 12px;">Shipping and Tracking</h3>
-            <div class="shipping-grid">
-              <div>Carrier: Blockchain Logistics</div>
-              <div>Estimated Delivery: 3-5 business days</div>
-              <div>Tracking: Blockchain verified updates</div>
-              <div>
-                <a href="/shipping/tracker" class="btn" style="margin-top: 12px; display: inline-flex;">Open Tracking Dashboard</a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="tab-content" data-tab-content="specs" role="tabpanel">
-          <table class="spec-table">
-            <tbody>
-              <% product.specifications.forEach((spec) => { %>
-                <tr>
-                  <td><%= spec.label %></td>
-                  <td><%= spec.value %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
         </div>
       </section>
     </main>
@@ -851,40 +753,8 @@
         });
       });
 
-      const tabButtons = document.querySelectorAll("[data-tab]");
-      const tabContents = document.querySelectorAll("[data-tab-content]");
-      tabButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const tab = btn.getAttribute("data-tab");
-          if (!tab) return;
-          tabButtons.forEach((item) => item.classList.remove("active"));
-          btn.classList.add("active");
-          tabContents.forEach((panel) => {
-            panel.classList.toggle("active", panel.getAttribute("data-tab-content") === tab);
-          });
-        });
-      });
-
+      const addToCartButton = document.getElementById("addToCartButton");
       const buyNowButton = document.getElementById("buyNowButton");
-      const trackOrderButton = document.getElementById("trackOrderButton");
-      const orderStatus = document.getElementById("orderStatus");
-
-      const updateOrderStatus = async (trackingId) => {
-        if (!orderStatus || !trackingId) {
-          return;
-        }
-        try {
-          const res = await fetch(`/api/shipping/${encodeURIComponent(trackingId)}`);
-          if (!res.ok) {
-            orderStatus.textContent = `Order ${trackingId}: status unavailable.`;
-            return;
-          }
-          const data = await res.json();
-          orderStatus.textContent = `Order ${trackingId}: ${data.currentStatus || "Pending"}.`;
-        } catch (err) {
-          orderStatus.textContent = `Order ${trackingId}: status unavailable.`;
-        }
-      };
 
       const sendTransaction = async (txData) => {
         if (!window.ethereum) {
@@ -902,6 +772,78 @@
         }
       };
 
+      const ensureBackendWeb3 = async (account) => {
+        if (!account) {
+          return false;
+        }
+        let contractAddress = "";
+        if (window.ethereum) {
+          try {
+            const [chainId, contractResponse] = await Promise.all([
+              window.ethereum.request({ method: "eth_chainId" }),
+              fetch("/build/ShippingTrackerContract.json")
+            ]);
+            if (contractResponse.ok) {
+              const contractInfo = await contractResponse.json();
+              const chainDecimal = Number.parseInt(chainId, 16);
+              const networks = contractInfo && contractInfo.networks ? contractInfo.networks : {};
+              const networkInfo = networks[chainDecimal] || networks[String(chainDecimal)];
+              contractAddress = networkInfo && networkInfo.address ? networkInfo.address : "";
+            }
+          } catch (err) {
+            contractAddress = "";
+          }
+        }
+
+        try {
+          const response = await fetch("/web3Connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contractAddress: contractAddress || "",
+              acct: account,
+              providerUrl: "<%= ganacheProviderUrl || '' %>" || undefined
+            })
+          });
+          return response.ok;
+        } catch (err) {
+          return false;
+        }
+      };
+
+      if (addToCartButton) {
+        addToCartButton.addEventListener("click", async () => {
+          let account = window.appWallet ? window.appWallet.getAccount() : "";
+          if (!account && window.appWallet) {
+            const result = await window.appWallet.connect();
+            account = result && result.account ? result.account : "";
+          }
+          if (!account) {
+            alert("Connect MetaMask to add items to the cart.");
+            return;
+          }
+          const productId = addToCartButton.dataset.productId;
+          const response = await fetch("/api/cart/tx/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productId,
+              quantity: 1,
+              account
+            })
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            alert(payload.message || "Unable to add to cart.");
+            return;
+          }
+          const txHash = await sendTransaction(payload.txData);
+          if (txHash) {
+            window.location.href = "/cart";
+          }
+        });
+      }
+
       if (buyNowButton) {
         buyNowButton.addEventListener("click", async () => {
           if (buyNowButton.dataset.processing === "true") {
@@ -912,14 +854,27 @@
           const originalLabel = buyNowButton.textContent;
           buyNowButton.textContent = "Processing...";
 
+          let account = "";
           if (window.appWallet && !window.appWallet.isConnected()) {
             const result = await window.appWallet.connect();
-            if (!result || !result.account) {
-              buyNowButton.dataset.processing = "false";
-              buyNowButton.disabled = false;
-              buyNowButton.textContent = originalLabel;
-              return;
-            }
+            account = result && result.account ? result.account : "";
+          } else if (window.appWallet) {
+            account = window.appWallet.getAccount();
+          }
+          if (!account) {
+            buyNowButton.dataset.processing = "false";
+            buyNowButton.disabled = false;
+            buyNowButton.textContent = originalLabel;
+            return;
+          }
+
+          const backendReady = await ensureBackendWeb3(account);
+          if (!backendReady) {
+            alert("Web3 not connected. Make sure MetaMask is on Ganache and try again.");
+            buyNowButton.dataset.processing = "false";
+            buyNowButton.disabled = false;
+            buyNowButton.textContent = originalLabel;
+            return;
           }
 
           const trackingId = `TRK-${Date.now()}`;
@@ -928,7 +883,13 @@
             recipientName: "<%= userEmail || 'Marketplace Customer' %>",
             recipientAddress: "Address on file",
             itemDescription: "<%= product.productInfo.name %>",
-            shipmentValue: "<%= product.productInfo.price %>"
+            shipmentValue: "<%= product.productInfo.price %>",
+            productIds: ["<%= product.id %>"],
+            quantities: [1],
+            productNames: ["<%= product.productInfo.name %>"],
+            productImages: ["<%= (product.images && product.images.length) ? product.images[0] : '/images/default-product.jpeg' %>"],
+            productPrices: ["<%= product.productInfo.price %>"],
+            account
           };
 
           const res = await fetch("/createShipment", {
@@ -954,41 +915,67 @@
           }
 
           try {
-            const orderItems = [{
-              id: "<%= product.id %>",
-              name: "<%= product.productInfo.name %>"
-            }];
-            localStorage.setItem(`order:${trackingId}`, JSON.stringify({
-              items: orderItems,
-              buyerEmail: "<%= userEmail || '' %>",
-              recipientAddress: "Address on file"
-            }));
+            const recordResponse = await fetch("/api/orders/tx/payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                trackingId,
+                paymentTxHash: txHash,
+                account
+              })
+            });
+            const recordPayload = await recordResponse.json();
+            if (recordResponse.ok && recordPayload.success) {
+              await sendTransaction(recordPayload.txData);
+            }
           } catch (err) {
             // ignore storage errors
           }
 
-          localStorage.setItem("lastTrackingId", trackingId);
-          updateOrderStatus(trackingId);
           window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
         });
       }
 
-      if (trackOrderButton) {
-        trackOrderButton.addEventListener("click", async () => {
-          const trackingId = localStorage.getItem("lastTrackingId");
-          if (!trackingId) {
-            alert("No tracking ID available yet.");
-            return;
-          }
-          await updateOrderStatus(trackingId);
-          window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+      document.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-reply-submit]");
+        if (!button) {
+          return;
+        }
+        const reviewId = button.getAttribute("data-reply-submit");
+        const input = document.querySelector(`.admin-reply-input[data-review-id="${reviewId}"]`);
+        const reply = input ? input.value.trim() : "";
+        if (!reply) {
+          alert("Reply cannot be empty.");
+          return;
+        }
+        let account = window.appWallet ? window.appWallet.getAccount() : "";
+        if (!account && window.appWallet) {
+          const result = await window.appWallet.connect();
+          account = result && result.account ? result.account : "";
+        }
+        if (!account) {
+          alert("Connect MetaMask to reply.");
+          return;
+        }
+        const res = await fetch("/api/reviews/reply/tx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reviewId,
+            reply,
+            account
+          })
         });
-      }
-
-      const lastTrackingId = localStorage.getItem("lastTrackingId");
-      if (lastTrackingId) {
-        updateOrderStatus(lastTrackingId);
-      }
+        const payload = await res.json();
+        if (!res.ok || !payload.success) {
+          alert(payload.message || "Unable to prepare reply.");
+          return;
+        }
+        const txHash = await sendTransaction(payload.txData);
+        if (txHash) {
+          window.location.reload();
+        }
+      });
     </script>
   </body>
 </html>

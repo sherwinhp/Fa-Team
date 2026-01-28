@@ -6,6 +6,8 @@ pragma solidity ^0.8.19;
  * @notice Stores product reviews on-chain and links them to purchase proofs.
  */
 contract ReviewContract {
+    address public admin;
+
     struct Review {
         bytes32 productId;
         address buyer;
@@ -15,6 +17,9 @@ contract ReviewContract {
         uint256 timestamp;
         bytes32 purchaseId;
         bytes32 deliveryTxHash;
+        string adminReply;
+        uint256 replyTimestamp;
+        address replyAuthor;
     }
 
     Review[] private reviews;
@@ -28,6 +33,16 @@ contract ReviewContract {
         bytes32 indexed purchaseId,
         bytes32 deliveryTxHash
     );
+    event ReviewReplied(uint256 indexed reviewId, address indexed admin, string reply);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor() {
+        admin = msg.sender;
+    }
 
     function submitReview(
         bytes32 productId,
@@ -51,7 +66,10 @@ contract ReviewContract {
                 photoHash: photoHash,
                 timestamp: block.timestamp,
                 purchaseId: purchaseId,
-                deliveryTxHash: deliveryTxHash
+                deliveryTxHash: deliveryTxHash,
+                adminReply: "",
+                replyTimestamp: 0,
+                replyAuthor: address(0)
             })
         );
         uint256 idx = reviews.length - 1;
@@ -68,6 +86,20 @@ contract ReviewContract {
             result[i] = reviews[ids[i]];
         }
         return result;
+    }
+
+    function getReviewIds(bytes32 productId) external view returns (uint256[] memory) {
+        return productReviews[productId];
+    }
+
+    function replyToReview(uint256 reviewId, string calldata reply) external onlyAdmin {
+        require(reviewId < reviews.length, "Review not found");
+        require(bytes(reply).length > 0, "Reply required");
+        Review storage target = reviews[reviewId];
+        target.adminReply = reply;
+        target.replyTimestamp = block.timestamp;
+        target.replyAuthor = msg.sender;
+        emit ReviewReplied(reviewId, msg.sender, reply);
     }
 
     function getAverageRating(bytes32 productId) external view returns (uint256 average, uint256 count) {

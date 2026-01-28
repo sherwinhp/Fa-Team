@@ -101,58 +101,19 @@
     <main class="page">
       <h1 style="margin: 0 0 16px;">Checkout</h1>
       <section class="card">
-        <% if (!cartItems || cartItems.length === 0) { %>
-          <div class="muted">Your cart is empty.</div>
-        <% } else { %>
-          <% cartItems.forEach((item) => { %>
-            <div class="item">
-              <% const img = item.product.images && item.product.images.length ? item.product.images[0] : '/images/default-product.jpeg'; %>
-              <img class="thumb" src="<%= img %>" alt="<%= item.product.productInfo.name %>">
-              <div>
-                <strong><%= item.product.productInfo.name %></strong>
-                <div class="muted">Qty: <%= item.quantity %></div>
-              </div>
-              <div style="font-weight: 700;">$<%= item.product.productInfo.price %> ETHR</div>
-            </div>
-          <% }) %>
-          <div class="total">
-            <span>Total</span>
-            <span>$<%= totalEth %> ETHR</span>
-          </div>
-          <button class="btn btn-primary" id="checkoutPayButton" type="button" style="margin-top: 16px;">
-            Pay with MetaMask
-          </button>
-          <div class="notice">
-            Payment is held in escrow and released once delivery is confirmed.
-          </div>
-        <% } %>
+        <div id="checkoutList" class="list">
+          <div class="muted">Loading on-chain cart...</div>
+        </div>
+        <div id="checkoutSummary"></div>
       </section>
     </main>
 
     <script>
       (() => {
-        const payButton = document.getElementById("checkoutPayButton");
-        if (!payButton) {
-          return;
-        }
-
-        const cartItems = <%- JSON.stringify(cartItems || []) %>;
+        const checkoutList = document.getElementById("checkoutList");
+        const checkoutSummary = document.getElementById("checkoutSummary");
         const recipientName = "<%= userEmail || 'Marketplace Customer' %>";
         const providerUrl = "<%= ganacheProviderUrl || '' %>";
-
-        const itemSummary = cartItems
-          .map((item) => `${item.quantity}x ${item.product.productInfo.name}`)
-          .join(", ");
-
-        const computedTotal = cartItems.reduce((sum, item) => {
-          const price = Number(item.product.productInfo.price || 0);
-          const qty = Number(item.quantity || 0);
-          if (!Number.isFinite(price) || !Number.isFinite(qty)) {
-            return sum;
-          }
-          return sum + price * qty;
-        }, 0);
-        const totalEth = computedTotal.toFixed(4);
         const allowedChains = ["0x539", "0x1691"];
 
         const sendTransaction = async (txData) => {
@@ -225,7 +186,72 @@
           }
         };
 
-        payButton.addEventListener("click", async () => {
+        const renderCart = (items, totalEth) => {
+          if (!checkoutList || !checkoutSummary) {
+            return;
+          }
+          if (!items || !items.length) {
+            checkoutList.innerHTML = `<div class="muted">Your cart is empty.</div>`;
+            checkoutSummary.innerHTML = "";
+            return;
+          }
+          checkoutList.innerHTML = items.map((item) => {
+            const img = item.product.images && item.product.images.length ? item.product.images[0] : "/images/default-product.jpeg";
+            return `
+              <div class="item">
+                <img class="thumb" src="${img}" alt="${item.product.productInfo.name}">
+                <div>
+                  <strong>${item.product.productInfo.name}</strong>
+                  <div class="muted">Qty: ${item.quantity}</div>
+                </div>
+                <div style="font-weight: 700;">$${item.product.productInfo.price} ETHR</div>
+              </div>
+            `;
+          }).join("");
+          checkoutSummary.innerHTML = `
+            <div class="total">
+              <span>Total</span>
+              <span>$${totalEth} ETHR</span>
+            </div>
+            <button class="btn btn-primary" id="checkoutPayButton" type="button" style="margin-top: 16px;">
+              Pay with MetaMask
+            </button>
+            <div class="notice">
+              Payment is held in escrow and released once delivery is confirmed.
+            </div>
+          `;
+        };
+
+        const loadCart = async () => {
+          if (!checkoutList) {
+            return;
+          }
+          const account = window.appWallet ? window.appWallet.getAccount() : "";
+          if (!account) {
+            checkoutList.innerHTML = `<div class="muted">Connect MetaMask to load your cart.</div>`;
+            if (checkoutSummary) {
+              checkoutSummary.innerHTML = "";
+            }
+            return null;
+          }
+          const res = await fetch(`/api/cart?account=${encodeURIComponent(account)}`);
+          const payload = await res.json();
+          if (!res.ok || !payload.success) {
+            checkoutList.innerHTML = `<div class="muted">${payload.message || "Unable to load cart."}</div>`;
+            if (checkoutSummary) {
+              checkoutSummary.innerHTML = "";
+            }
+            return null;
+          }
+          renderCart(payload.items || [], payload.totalEth || "0.0000");
+          return payload;
+        };
+
+        const handleCheckout = async () => {
+          const payButton = document.getElementById("checkoutPayButton");
+          if (!payButton) {
+            return;
+          }
           if (payButton.dataset.processing === "true") {
             return;
           }
@@ -262,8 +288,9 @@
           }
 
           const trackingId = `TRK-${Date.now()}`;
-          if (!Number.isFinite(computedTotal) || computedTotal <= 0) {
-            alert("Cart total is invalid. Please review your cart.");
+          const cartPayload = await loadCart();
+          if (!cartPayload || !cartPayload.items || !cartPayload.items.length) {
+            alert("Cart is empty.");
             payButton.dataset.processing = "false";
             payButton.disabled = false;
             payButton.textContent = originalLabel;
@@ -273,9 +300,17 @@
             trackingId,
             recipientName,
             recipientAddress: "Address on file",
-            itemDescription: itemSummary || "Marketplace order",
-            shipmentValue: totalEth,
-            useCartTotal: true
+            itemDescription: "Marketplace order",
+            shipmentValue: "0.0000",
+            useCartTotal: true,
+            account,
+            productIds: cartPayload.items.map((item) => item.product.id),
+            quantities: cartPayload.items.map((item) => item.quantity),
+            productNames: cartPayload.items.map((item) => item.product.productInfo.name || ""),
+            productImages: cartPayload.items.map((item) => {
+              const images = item.product.images || [];
+              return images.length ? images[0] : "";
+            })
           };
 
           const res = await fetch("/createShipment", {
@@ -301,21 +336,46 @@
           }
 
           try {
-            const orderItems = (cartItems || []).map((item) => ({
-              id: item.product && item.product.id ? item.product.id : "",
-              name: item.product && item.product.productInfo ? item.product.productInfo.name : "Product"
-            }));
-            localStorage.setItem(`order:${trackingId}`, JSON.stringify({
-              items: orderItems,
-              buyerEmail: "<%= userEmail || '' %>",
-              recipientAddress: "Address on file"
-            }));
+            const recordResponse = await fetch("/api/orders/tx/payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                trackingId,
+                paymentTxHash: txHash,
+                account
+              })
+            });
+            const recordPayload = await recordResponse.json();
+            if (recordResponse.ok && recordPayload.success) {
+              await sendTransaction(recordPayload.txData);
+            }
+            const clearResponse = await fetch("/api/cart/tx/clear", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ account })
+            });
+            const clearPayload = await clearResponse.json();
+            if (clearResponse.ok && clearPayload.success) {
+              await sendTransaction(clearPayload.txData);
+            }
           } catch (err) {
             // ignore storage errors
           }
 
-          await fetch("/cart/clear", { method: "POST" });
           window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+        };
+
+        document.addEventListener("click", (event) => {
+          if (event.target && event.target.id === "checkoutPayButton") {
+            handleCheckout();
+          }
+        });
+
+        loadCart();
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) {
+            loadCart();
+          }
         });
       })();
     </script>

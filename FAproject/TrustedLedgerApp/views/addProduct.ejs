@@ -261,6 +261,11 @@
             const price = String(formData.get("price") || "").trim();
             const category = String(formData.get("category") || "").trim();
             const imageUrl = getPrimaryImage(String(formData.get("imageUrls") || ""));
+            const sellerName = String(formData.get("sellerName") || "").trim();
+            const stock = String(formData.get("stock") || "").trim();
+            const fullDescription = String(formData.get("fullDescription") || "").trim();
+            const features = String(formData.get("features") || "");
+            const specifications = String(formData.get("specifications") || "");
 
             if (!name || !description || !price) {
               showError("Product name, description, and price are required.");
@@ -276,6 +281,11 @@
                 price,
                 category,
                 imageUrl,
+                sellerName,
+                stock,
+                fullDescription,
+                features,
+                specifications,
                 account
               })
             });
