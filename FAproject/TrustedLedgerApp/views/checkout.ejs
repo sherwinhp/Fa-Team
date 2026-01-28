@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checkout</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+      :root {
+        --ink: #111827;
+        --muted: #6b7280;
+        --panel: #ffffff;
+        --soft: #f3f4f6;
+        --border: #e5e7eb;
+        --brand: #2563eb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+        background: #f5f7fb;
+        color: var(--ink);
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 20px 60px;
+      }
+
+      .card {
+        background: var(--panel);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        padding: 18px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      }
+
+      .item {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 16px;
+        align-items: center;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .item:last-child {
+        border-bottom: none;
+      }
+
+      .thumb {
+        width: 70px;
+        height: 70px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: var(--soft);
+      }
+
+      .btn {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .btn-primary {
+        background: var(--brand);
+        color: #fff;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 700;
+        margin-top: 16px;
+      }
+
+      .notice {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <%- include('partials/navbar', { acct }) %>
+
+    <main class="page">
+      <h1 style="margin: 0 0 16px;">Checkout</h1>
+      <section class="card">
+        <% if (!cartItems || cartItems.length === 0) { %>
+          <div class="muted">Your cart is empty.</div>
+        <% } else { %>
+          <% cartItems.forEach((item) => { %>
+            <div class="item">
+              <% const img = item.product.images && item.product.images.length ? item.product.images[0] : '/images/default-product.jpeg'; %>
+              <img class="thumb" src="<%= img %>" alt="<%= item.product.productInfo.name %>">
+              <div>
+                <strong><%= item.product.productInfo.name %></strong>
+                <div class="muted">Qty: <%= item.quantity %></div>
+              </div>
+              <div style="font-weight: 700;">$<%= item.product.productInfo.price %> ETHR</div>
+            </div>
+          <% }) %>
+          <div class="total">
+            <span>Total</span>
+            <span>$<%= totalEth %> ETHR</span>
+          </div>
+          <button class="btn btn-primary" id="checkoutPayButton" type="button" style="margin-top: 16px;">
+            Pay with MetaMask
+          </button>
+          <div class="notice">
+            Payment is held in escrow and released once delivery is confirmed.
+          </div>
+        <% } %>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const payButton = document.getElementById("checkoutPayButton");
+        if (!payButton) {
+          return;
+        }
+
+        const cartItems = <%- JSON.stringify(cartItems || []) %>;
+        const recipientName = "<%= userEmail || 'Marketplace Customer' %>";
+        const providerUrl = "<%= ganacheProviderUrl || '' %>";
+
+        const itemSummary = cartItems
+          .map((item) => `${item.quantity}x ${item.product.productInfo.name}`)
+          .join(", ");
+
+        const computedTotal = cartItems.reduce((sum, item) => {
+          const price = Number(item.product.productInfo.price || 0);
+          const qty = Number(item.quantity || 0);
+          if (!Number.isFinite(price) || !Number.isFinite(qty)) {
+            return sum;
+          }
+          return sum + price * qty;
+        }, 0);
+        const totalEth = computedTotal.toFixed(4);
+        const allowedChains = ["0x539", "0x1691"];
+
+        const sendTransaction = async (txData) => {
+          if (!window.ethereum) {
+            alert("MetaMask not detected.");
+            return null;
+          }
+          try {
+            return await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [txData]
+            });
+          } catch (err) {
+            alert("Transaction canceled or failed.");
+            return null;
+          }
+        };
+
+        const ensureConnected = async () => {
+          if (window.appWallet && window.appWallet.isConnected()) {
+            return window.appWallet.getAccount();
+          }
+          if (window.appWallet) {
+            const result = await window.appWallet.connect();
+            return result && result.account ? result.account : "";
+          }
+          if (window.ethereum) {
+            const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+            return accounts && accounts[0] ? accounts[0] : "";
+          }
+          return "";
+        };
+
+        const ensureBackendWeb3 = async (account) => {
+          if (!account) {
+            return false;
+          }
+          let contractAddress = "";
+          if (window.ethereum) {
+            try {
+              const [chainId, contractResponse] = await Promise.all([
+                window.ethereum.request({ method: "eth_chainId" }),
+                fetch("/build/ShippingTrackerContract.json")
+              ]);
+              if (contractResponse.ok) {
+                const contractInfo = await contractResponse.json();
+                const chainDecimal = Number.parseInt(chainId, 16);
+                const networks = contractInfo && contractInfo.networks ? contractInfo.networks : {};
+                const networkInfo = networks[chainDecimal] || networks[String(chainDecimal)];
+                contractAddress = networkInfo && networkInfo.address ? networkInfo.address : "";
+              }
+            } catch (err) {
+              contractAddress = "";
+            }
+          }
+
+          try {
+            const response = await fetch("/web3Connect", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contractAddress: contractAddress || "",
+                acct: account,
+                providerUrl: providerUrl || undefined
+              })
+            });
+            return response.ok;
+          } catch (err) {
+            return false;
+          }
+        };
+
+        payButton.addEventListener("click", async () => {
+          if (payButton.dataset.processing === "true") {
+            return;
+          }
+          payButton.dataset.processing = "true";
+          payButton.disabled = true;
+          const originalLabel = payButton.textContent;
+          payButton.textContent = "Processing...";
+
+          if (window.ethereum) {
+            const chainId = await window.ethereum.request({ method: "eth_chainId" });
+            if (chainId && !allowedChains.includes(String(chainId).toLowerCase())) {
+              alert("Wrong network. Please switch MetaMask to Ganache (Chain ID 1337).");
+              payButton.dataset.processing = "false";
+              payButton.disabled = false;
+              payButton.textContent = originalLabel;
+              return;
+            }
+          }
+
+          const account = await ensureConnected();
+          if (!account) {
+            payButton.dataset.processing = "false";
+            payButton.disabled = false;
+            payButton.textContent = originalLabel;
+            return;
+          }
+          const backendReady = await ensureBackendWeb3(account);
+          if (!backendReady) {
+            alert("Web3 not connected. Make sure MetaMask is on the Ganache network and try again.");
+            payButton.dataset.processing = "false";
+            payButton.disabled = false;
+            payButton.textContent = originalLabel;
+            return;
+          }
+
+          const trackingId = `TRK-${Date.now()}`;
+          if (!Number.isFinite(computedTotal) || computedTotal <= 0) {
+            alert("Cart total is invalid. Please review your cart.");
+            payButton.dataset.processing = "false";
+            payButton.disabled = false;
+            payButton.textContent = originalLabel;
+            return;
+          }
+          const payload = {
+            trackingId,
+            recipientName,
+            recipientAddress: "Address on file",
+            itemDescription: itemSummary || "Marketplace order",
+            shipmentValue: totalEth,
+            useCartTotal: true
+          };
+
+          const res = await fetch("/createShipment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!data || !data.txData) {
+            alert(data && data.message ? data.message : "Unable to create shipment.");
+            payButton.dataset.processing = "false";
+            payButton.disabled = false;
+            payButton.textContent = originalLabel;
+            return;
+          }
+
+          const txHash = await sendTransaction(data.txData);
+          if (!txHash) {
+            payButton.dataset.processing = "false";
+            payButton.disabled = false;
+            payButton.textContent = originalLabel;
+            return;
+          }
+
+          try {
+            const orderItems = (cartItems || []).map((item) => ({
+              id: item.product && item.product.id ? item.product.id : "",
+              name: item.product && item.product.productInfo ? item.product.productInfo.name : "Product"
+            }));
+            localStorage.setItem(`order:${trackingId}`, JSON.stringify({
+              items: orderItems,
+              buyerEmail: "<%= userEmail || '' %>",
+              recipientAddress: "Address on file"
+            }));
+          } catch (err) {
+            // ignore storage errors
+          }
+
+          await fetch("/cart/clear", { method: "POST" });
+          window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+        });
+      })();
+    </script>
+  </body>
+</html>

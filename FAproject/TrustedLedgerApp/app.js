@@ -4,6 +4,8 @@ const session = require('express-session');
 const path = require('path');
 const {Web3} = require('web3');
 const fs = require("fs");
+const crypto = require("crypto");
+const multer = require("multer");
 
 //Set up view engine from ejs library
 const app = express();
@@ -22,7 +24,9 @@ app.use(session({
   saveUninitialized: false
 }));
 
-const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8545';
+const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL
+  || process.env.GANACHE_PROVIDER_URL
+  || 'http://127.0.0.1:7545';
 const ETH_USD_RATE = Number(process.env.ETH_USD_RATE) || 1850;
 const WALLET_TOKEN_SYMBOL = process.env.WALLET_TOKEN_SYMBOL || 'ETHR';
 const WALLET_TOKEN_NAME = process.env.WALLET_TOKEN_NAME || 'Ethereum';
@@ -61,6 +65,56 @@ let loading = true;
 let web3Instance = new Web3(WEB3_PROVIDER_URL);
 let contractInstance = null;
 let walletContractInstance = null;
+const upload = multer({ storage: multer.memoryStorage() });
+
+const CARTS_PATH = path.join(__dirname, "data", "carts.json");
+let persistedCarts = {};
+
+const loadPersistedCarts = () => {
+  try {
+    if (fs.existsSync(CARTS_PATH)) {
+      const raw = fs.readFileSync(CARTS_PATH, "utf8");
+      persistedCarts = raw ? JSON.parse(raw) : {};
+    }
+  } catch (error) {
+    persistedCarts = {};
+  }
+};
+
+const savePersistedCarts = () => {
+  try {
+    fs.mkdirSync(path.dirname(CARTS_PATH), { recursive: true });
+    fs.writeFileSync(CARTS_PATH, JSON.stringify(persistedCarts, null, 2));
+  } catch (error) {
+    // ignore persistence errors
+  }
+};
+
+const getUserCartKey = (req) => {
+  const email = req.session && req.session.user ? req.session.user.email : "";
+  return email ? email.toLowerCase() : "";
+};
+
+const syncCartToStore = (req) => {
+  const key = getUserCartKey(req);
+  if (!key) {
+    return;
+  }
+  persistedCarts[key] = req.session && req.session.cart ? req.session.cart : { items: {} };
+  savePersistedCarts();
+};
+
+const loadCartFromStore = (req) => {
+  const key = getUserCartKey(req);
+  if (!key) {
+    return;
+  }
+  if (persistedCarts[key]) {
+    req.session.cart = persistedCarts[key];
+  }
+};
+
+loadPersistedCarts();
 
 const walletArtifactPath = path.join(__dirname, 'public', 'build', 'WalletContract.json');
 let walletContractAbi = null;
@@ -68,6 +122,46 @@ try {
   walletContractAbi = JSON.parse(fs.readFileSync(walletArtifactPath, 'utf8')).abi;
 } catch (error) {
   console.warn("Wallet contract ABI not available:", error.message || error);
+}
+
+const reviewArtifactPath = path.join(__dirname, 'public', 'build', 'ReviewContract.json');
+let reviewContractAbi = null;
+let reviewContractJson = null;
+try {
+  reviewContractJson = JSON.parse(fs.readFileSync(reviewArtifactPath, 'utf8'));
+  reviewContractAbi = reviewContractJson.abi;
+} catch (error) {
+  console.warn("Review contract ABI not available:", error.message || error);
+}
+
+const reputationArtifactPath = path.join(__dirname, 'public', 'build', 'ReputationContract.json');
+let reputationContractAbi = null;
+let reputationContractJson = null;
+try {
+  reputationContractJson = JSON.parse(fs.readFileSync(reputationArtifactPath, 'utf8'));
+  reputationContractAbi = reputationContractJson.abi;
+} catch (error) {
+  console.warn("Reputation contract ABI not available:", error.message || error);
+}
+
+const notaryArtifactPath = path.join(__dirname, 'public', 'build', 'DocumentNotaryContract.json');
+let notaryContractAbi = null;
+let notaryContractJson = null;
+try {
+  notaryContractJson = JSON.parse(fs.readFileSync(notaryArtifactPath, 'utf8'));
+  notaryContractAbi = notaryContractJson.abi;
+} catch (error) {
+  console.warn("Document notary ABI not available:", error.message || error);
+}
+
+const productArtifactPath = path.join(__dirname, 'public', 'build', 'ProductCatalog.json');
+let productContractAbi = null;
+let productContractJson = null;
+try {
+  productContractJson = JSON.parse(fs.readFileSync(productArtifactPath, 'utf8'));
+  productContractAbi = productContractJson.abi;
+} catch (error) {
+  console.warn("Product catalog ABI not available:", error.message || error);
 }
 
 const mockProducts = [
@@ -125,6 +219,158 @@ const mockProducts = [
     },
     rating: 4.8,
     reviewCount: 2547
+  },
+  {
+    id: "2",
+    productInfo: {
+      name: "AirPods Pro Gen 2",
+      description: "Noise-canceling earbuds with spatial audio and long battery life.",
+      price: "0.18",
+      category: "Audio"
+    },
+    seller: {
+      name: "TrustedLedger Store",
+      rating: 96.4,
+      sales: 834,
+      verified: true
+    },
+    stock: 32,
+    status: "In Stock",
+    fullDescription:
+      "Compact premium earbuds with adaptive noise control, clear voice calls, and all-day comfort for travel or work.",
+    features: [
+      "Adaptive noise control",
+      "Spatial audio with head tracking",
+      "MagSafe charging case",
+      "Sweat and water resistant"
+    ],
+    images: ["/images/airpods.jpg"],
+    specifications: [
+      { label: "Battery", value: "Up to 6 hours (earbuds)" },
+      { label: "Case", value: "USB-C + wireless charging" },
+      { label: "Connectivity", value: "Bluetooth 5.x" },
+      { label: "Color", value: "White" }
+    ],
+    blockchain: {
+      smartContractId: "0x2f1d9a5d4b8e6c7a9012f3b4c5d6e7f8a9b0c1d2",
+      lastVerified: "Jan 21, 2026 11:05 AM"
+    },
+    rating: 4.7,
+    reviewCount: 1180
+  },
+  {
+    id: "3",
+    productInfo: {
+      name: "iPhone 15 Pro",
+      description: "Flagship smartphone with titanium frame and pro-grade camera.",
+      price: "0.92",
+      category: "Mobile"
+    },
+    seller: {
+      name: "TrustedLedger Store",
+      rating: 97.1,
+      sales: 642,
+      verified: true
+    },
+    stock: 18,
+    status: "In Stock",
+    fullDescription:
+      "A premium smartphone with a bright display, fast performance, and advanced camera system for creators.",
+    features: [
+      "A17 Pro performance",
+      "Pro camera system",
+      "Titanium design",
+      "All-day battery life"
+    ],
+    images: ["/images/iphone.jpg"],
+    specifications: [
+      { label: "Display", value: "6.1-inch OLED" },
+      { label: "Storage", value: "256GB" },
+      { label: "Camera", value: "48MP main" },
+      { label: "Color", value: "Natural Titanium" }
+    ],
+    blockchain: {
+      smartContractId: "0x9a8b7c6d5e4f3210a1b2c3d4e5f67890abcdef12",
+      lastVerified: "Jan 20, 2026 04:45 PM"
+    },
+    rating: 4.9,
+    reviewCount: 2096
+  },
+  {
+    id: "4",
+    productInfo: {
+      name: "Power Bank 20000mAh",
+      description: "High-capacity portable charger with fast USB-C output.",
+      price: "0.06",
+      category: "Accessories"
+    },
+    seller: {
+      name: "TrustedLedger Store",
+      rating: 95.2,
+      sales: 1543,
+      verified: true
+    },
+    stock: 60,
+    status: "In Stock",
+    fullDescription:
+      "Reliable travel power with dual outputs, fast charging, and LED battery indicators.",
+    features: [
+      "20000mAh capacity",
+      "USB-C PD fast charge",
+      "Dual output ports",
+      "LED battery display"
+    ],
+    images: ["/images/powerbank.jpg"],
+    specifications: [
+      { label: "Capacity", value: "20000mAh" },
+      { label: "Output", value: "USB-C PD + USB-A" },
+      { label: "Charging", value: "Fast charge support" },
+      { label: "Color", value: "Midnight Blue" }
+    ],
+    blockchain: {
+      smartContractId: "0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
+      lastVerified: "Jan 19, 2026 09:20 AM"
+    },
+    rating: 4.6,
+    reviewCount: 742
+  },
+  {
+    id: "5",
+    productInfo: {
+      name: "Supreme Water Blaster",
+      description: "Limited-run collector water blaster with Supreme branding.",
+      price: "0.12",
+      category: "Collectibles"
+    },
+    seller: {
+      name: "TrustedLedger Store",
+      rating: 94.8,
+      sales: 312,
+      verified: true
+    },
+    stock: 14,
+    status: "Limited Stock",
+    fullDescription:
+      "Streetwear-inspired collector item with premium packaging and verified authenticity.",
+    features: [
+      "Limited edition release",
+      "Authenticity verified",
+      "Premium packaging",
+      "Display-ready finish"
+    ],
+    images: ["/images/supreme.jpg"],
+    specifications: [
+      { label: "Edition", value: "Limited Run" },
+      { label: "Material", value: "ABS plastic" },
+      { label: "Color", value: "Red" },
+      { label: "Includes", value: "Display stand" }
+    ],
+    blockchain: {
+      smartContractId: "0x4a5b6c7d8e9f0123456789abcdefabcdefabcd",
+      lastVerified: "Jan 18, 2026 02:10 PM"
+    },
+    rating: 4.5,
+    reviewCount: 188
   }
 ];
 
@@ -167,7 +413,196 @@ const mockReviews = [
   }
 ];
 
-let products = [...mockProducts];
+let products = [];
+
+async function getProductContract() {
+  if (!productContractAbi || !productContractJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = productContractJson.networks
+    ? productContractJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(productContractAbi, networkData.address);
+}
+
+async function getReviewContract() {
+  if (!reviewContractAbi || !reviewContractJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = reviewContractJson.networks
+    ? reviewContractJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(reviewContractAbi, networkData.address);
+}
+
+async function getReputationContract() {
+  if (!reputationContractAbi || !reputationContractJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = reputationContractJson.networks
+    ? reputationContractJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(reputationContractAbi, networkData.address);
+}
+
+async function getNotaryContract() {
+  if (!notaryContractAbi || !notaryContractJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = notaryContractJson.networks
+    ? notaryContractJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(notaryContractAbi, networkData.address);
+}
+
+const buildProductDefaults = (overrides = {}) => {
+  const now = new Date();
+  return {
+    seller: {
+      name: "TrustedLedger Store",
+      rating: 96.1,
+      sales: 0,
+      verified: true
+    },
+    stock: 20,
+    status: "In Stock",
+    fullDescription:
+      overrides.productInfo?.description ||
+      "Verified marketplace listing anchored on-chain for authenticity and tracking.",
+    features: [
+      "Blockchain verified authenticity",
+      "Secure escrow-ready checkout",
+      "TrustedLedger seller assurance"
+    ],
+    images: overrides.images && overrides.images.length
+      ? overrides.images
+      : ["/images/default-product.jpeg"],
+    specifications: [
+      { label: "Condition", value: "New" },
+      { label: "Warranty", value: "1 Year" }
+    ],
+    blockchain: {
+      smartContractId: overrides.contractAddress || "Pending deployment",
+      lastVerified: now.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    },
+    rating: 4.6,
+    reviewCount: 0
+  };
+};
+
+async function loadProductsFromChain() {
+  try {
+    const contract = await getProductContract();
+    if (!contract || !web3Instance) {
+      return [];
+    }
+
+    const ids = await contract.methods.getProductIds().call();
+    if (!ids || !ids.length) {
+      return [];
+    }
+
+    const items = await Promise.all(
+      ids.map(async (id) => {
+        const data = await contract.methods.getProduct(id).call();
+        const priceEth = web3Instance.utils.fromWei(data.priceWei || "0", "ether");
+        const base = {
+          id: id,
+          productInfo: {
+            name: data.name,
+            description: data.description,
+            price: priceEth,
+            category: data.category
+          },
+          images: data.imageUrl ? [data.imageUrl] : ["/images/default-product.jpeg"]
+        };
+        return {
+          ...buildProductDefaults({
+            productInfo: base.productInfo,
+            images: base.images,
+            contractAddress: contract.options.address
+          }),
+          ...base
+        };
+      })
+    );
+
+    return items;
+  } catch (error) {
+    console.warn("Unable to load on-chain products:", error.message || error);
+    return [];
+  }
+}
+
+async function getProductsForView() {
+  const chainProducts = await loadProductsFromChain();
+  products = chainProducts;
+  return products;
+}
+
+async function buildCartSummary(req) {
+  const liveProducts = await getProductsForView();
+  const cart = getCart(req);
+  const cartItems = Object.keys(cart.items)
+    .map((id) => {
+      const product = liveProducts.find((item) => item.id === id);
+      if (!product) {
+        return null;
+      }
+      return {
+        product,
+        quantity: cart.items[id]
+      };
+    })
+    .filter(Boolean);
+
+  const total = cartItems.reduce((sum, item) => {
+    const price = Number(item.product.productInfo.price || 0);
+    if (!Number.isFinite(price)) {
+      return sum;
+    }
+    return sum + price * item.quantity;
+  }, 0);
+
+  return {
+    cartItems,
+    totalEth: total.toFixed(4)
+  };
+}
 
 function parseList(input) {
   if (!input) return [];
@@ -322,6 +757,75 @@ function formatUsd(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+const toHexQuantity = (value) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  try {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return value;
+      }
+      if (trimmed.startsWith("0x")) {
+        return trimmed;
+      }
+      if (!/^\d+$/.test(trimmed)) {
+        return value;
+      }
+      return `0x${BigInt(trimmed).toString(16)}`;
+    }
+    if (typeof value === "bigint") {
+      return `0x${value.toString(16)}`;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return `0x${BigInt(Math.trunc(value)).toString(16)}`;
+    }
+    return value;
+  } catch (err) {
+    return value;
+  }
+};
+
+const isZeroQuantity = (value) => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+  if (typeof value === "number") {
+    return value === 0;
+  }
+  if (typeof value === "bigint") {
+    return value === 0n;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim().toLowerCase();
+    return trimmed === "0" || trimmed === "0x0";
+  }
+  return false;
+};
+
+const MAX_PRODUCT_PRICE_ETH = 15;
+
+async function getPreferredGasPrice() {
+  if (!web3Instance) {
+    return null;
+  }
+  try {
+    const chainIdValue = await web3Instance.eth.getChainId();
+    const chainId = Number(chainIdValue);
+    if (chainId === 5777 || chainId === 1337) {
+      return "0";
+    }
+  } catch (error) {
+    // fall through to default gas price
+  }
+  try {
+    return await web3Instance.eth.getGasPrice();
+  } catch (error) {
+    return null;
+  }
 }
 
 function buildEmptyWalletSnapshot() {
@@ -480,7 +984,8 @@ app.get('/', async(req, res) => {
     console.log("Shipping Tracker Home Page");
     await componentWillMount();
     try {
-      const featuredProducts = products.slice(0, 4);
+      const liveProducts = await getProductsForView();
+      const featuredProducts = liveProducts.slice(0, 4);
       res.render('index', {
         acct: account,
         cnt: shipmentCount,
@@ -498,10 +1003,11 @@ app.get('/', async(req, res) => {
     }
 });
 
-app.get('/products', (req, res) => {
+app.get('/products', async (req, res) => {
+  const liveProducts = await getProductsForView();
   res.render('products', {
     acct: account,
-    products: products,
+    products: liveProducts,
     status: loading
   });
 });
@@ -536,6 +1042,7 @@ app.post('/login', (req, res) => {
     email,
     role: role === "admin" ? "admin" : "user"
   };
+  loadCartFromStore(req);
 
   const redirectTo = typeof nextPath === "string" && nextPath ? nextPath : "/wallet";
   return res.redirect(redirectTo);
@@ -562,6 +1069,7 @@ app.post('/register', (req, res) => {
     email,
     role: "user"
   };
+  loadCartFromStore(req);
 
   return res.redirect('/wallet');
 });
@@ -598,12 +1106,141 @@ app.get('/api/wallet', requireLogin, async (req, res) => {
   }
 });
 
-app.get('/admin', requireAdmin, (req, res) => {
-  res.render('admin-dashboard', { acct: account });
+app.get('/admin', requireAdmin, async (req, res) => {
+  const liveProducts = await getProductsForView();
+  res.render('admin-dashboard', { acct: account, products: liveProducts });
+});
+
+app.get('/api/orders', requireAdmin, async (req, res) => {
+  try {
+    if (!contractInstance || !web3Instance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+
+    const ids = await contractInstance.methods.getSellerShipments(sellerAddress).call();
+    if (!ids || !ids.length) {
+      return res.json({ success: true, orders: [] });
+    }
+
+    const statusLabels = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
+    const orders = await Promise.all(
+      ids.map(async (trackingId) => {
+        const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
+        const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+        return {
+          trackingId,
+          seller: shipmentData.seller,
+          buyer: shipmentData.buyer,
+          recipientName: shipmentData.recipientName,
+          recipientAddress: shipmentData.recipientAddress,
+          itemDescription: shipmentData.itemDescription,
+          shipmentValue: web3Instance.utils.fromWei(shipmentData.shipmentValue, 'ether'),
+          createdAt: new Date(parseInt(shipmentData.createdAt, 10) * 1000).toISOString(),
+          statusCode: Number(status[0]),
+          statusLabel: statusLabels[Number(status[0])] || "Pending",
+          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString()
+        };
+      })
+    );
+
+    return res.json({ success: true, orders });
+  } catch (error) {
+    console.error('Error loading orders:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load orders'
+    });
+  }
+});
+
+app.get('/api/orders/user', requireLogin, async (req, res) => {
+  try {
+    if (!contractInstance || !web3Instance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+
+    if (!account) {
+      return res.status(400).json({
+        success: false,
+        message: 'No MetaMask account connected'
+      });
+    }
+
+    const ids = await contractInstance.methods.getBuyerShipments(account).call();
+    if (!ids || !ids.length) {
+      return res.json({ success: true, orders: [] });
+    }
+
+    const statusLabels = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
+    const orders = await Promise.all(
+      ids.map(async (trackingId) => {
+        const shipmentData = await contractInstance.methods.getShipment(trackingId).call();
+        const status = await contractInstance.methods.getShipmentStatus(trackingId).call();
+        return {
+          trackingId,
+          seller: shipmentData.seller,
+          buyer: shipmentData.buyer,
+          recipientName: shipmentData.recipientName,
+          recipientAddress: shipmentData.recipientAddress,
+          itemDescription: shipmentData.itemDescription,
+          shipmentValue: web3Instance.utils.fromWei(shipmentData.shipmentValue, 'ether'),
+          createdAt: new Date(parseInt(shipmentData.createdAt, 10) * 1000).toISOString(),
+          statusCode: Number(status[0]),
+          statusLabel: statusLabels[Number(status[0])] || "Pending",
+          lastUpdateTime: new Date(parseInt(status[1], 10) * 1000).toISOString()
+        };
+      })
+    );
+
+    return res.json({ success: true, orders });
+  } catch (error) {
+    console.error('Error loading user orders:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load orders'
+    });
+  }
+});
+
+app.get('/api/reviews/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing product id'
+      });
+    }
+    const contract = await getReviewContract();
+    if (!contract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Review contract not available'
+      });
+    }
+    const reviews = await contract.methods.getReviews(productId).call();
+    return res.json({ success: true, reviews: reviews || [] });
+  } catch (error) {
+    console.error('Error loading reviews:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load reviews'
+    });
+  }
 });
 
 app.get('/documents', requireLogin, (req, res) => {
   res.render('documents', { acct: account });
+});
+
+app.get('/orders', requireLogin, (req, res) => {
+  res.render('orders', { acct: account });
 });
 
 // Add product page
@@ -621,47 +1258,233 @@ app.get('/addproduct', requireAdmin, (req, res) => {
 });
 
 app.post('/addproduct', requireAdmin, (req, res) => {
-  const { name, description, price } = req.body;
+  return res.status(400).render('addProduct', {
+    acct: account,
+    products: products,
+    status: loading,
+    addObject: null,
+    addFunction: null,
+    addStatus: false,
+    error: 'Use the on-chain add flow with MetaMask to create products.',
+    formData: req.body
+  });
+});
 
-  if (!name || !description || !price) {
-    return res.status(400).render('addProduct', {
-      acct: account,
-      products: products,
-      status: loading,
-      addObject: null,
-      addFunction: null,
-      addStatus: false,
-      error: 'Please fill in product name, description, and price.',
-      formData: req.body
+app.get('/product/:id', async (req, res) => {
+  const { id } = req.params;
+  const liveProducts = await getProductsForView();
+  const product = liveProducts.find((item) => item.id === id);
+  if (!product) {
+    return res.redirect('/products');
+  }
+  let reviews = [];
+  const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+  try {
+    const reviewContract = await getReviewContract();
+    if (reviewContract) {
+      const onChainReviews = await reviewContract.methods.getReviews(product.id).call();
+      reviews = (onChainReviews || []).map((review) => {
+        const ratingValue = Number(review.rating || 0);
+        if (ratingValue >= 1 && ratingValue <= 5) {
+          ratingCounts[ratingValue] += 1;
+        }
+        const buyer = String(review.buyer || "");
+        return {
+          reviewerName: buyer ? `${buyer.slice(0, 6)}...${buyer.slice(-4)}` : "On-chain buyer",
+          rating: ratingValue,
+          date: new Date(Number(review.timestamp) * 1000).toLocaleDateString("en-GB"),
+          title: "On-chain review",
+          comment: review.commentHash || "",
+          photoHash: review.photoHash || "",
+          verifiedPurchase: true,
+          helpfulVotes: 0,
+          blockchainTxHash: review.deliveryTxHash || "0x"
+        };
+      });
+    } else {
+      reviews = mockReviews;
+      reviews.forEach((review) => {
+        ratingCounts[review.rating] += 1;
+      });
+    }
+  } catch (error) {
+    console.warn("Unable to load on-chain reviews:", error.message || error);
+    reviews = mockReviews;
+    reviews.forEach((review) => {
+      ratingCounts[review.rating] += 1;
     });
   }
 
-  const newProduct = buildProductFromForm(req.body);
-  products.unshift(newProduct);
-  return res.redirect('/');
-});
-
-app.get('/product/:id', (req, res) => {
-  const { id } = req.params;
-  const product = products.find((item) => item.id === id) || products[0];
-  const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  mockReviews.forEach((review) => {
-    ratingCounts[review.rating] += 1;
-  });
-  const totalReviews = mockReviews.length || 1;
+  const totalReviews = reviews.length || 1;
   const ratingDistribution = {};
   for (let i = 1; i <= 5; i += 1) {
     ratingDistribution[i] = Math.round((ratingCounts[i] / totalReviews) * 100);
   }
 
+  const ratedReviews = reviews.filter((review) => Number(review.rating) > 0);
+  const averageRating = ratedReviews.length
+    ? ratedReviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / ratedReviews.length
+    : product.rating || 0;
+
+  let sellerReputation = null;
+  try {
+    const reputationContract = await getReputationContract();
+    if (reputationContract) {
+      const rep = await reputationContract.methods.getSellerReputation(sellerAddress).call();
+      const percent = Number(rep.reputationPercent || 0);
+      sellerReputation = {
+        percent,
+        totalRatings: Number(rep.totalRatings || 0),
+        totalSales: Number(rep.totalSales || 0),
+        verified: Boolean(rep.verified)
+      };
+      product.seller.rating = percent ? Math.round((percent / 20) * 10) / 10 : product.seller.rating;
+      product.seller.sales = sellerReputation.totalSales || product.seller.sales;
+      product.seller.verified = sellerReputation.verified;
+    }
+  } catch (error) {
+    console.warn("Unable to load seller reputation:", error.message || error);
+  }
+
   res.render('product', {
     acct: account,
     product,
-    reviews: mockReviews,
+    reviews,
     ratingCounts,
     ratingDistribution,
-    returnTo: req.originalUrl
+    returnTo: req.originalUrl,
+    averageRating,
+    reviewCount: reviews.length,
+    sellerReputation
   });
+});
+
+app.post('/api/products/tx/create', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { name, description, price, imageUrl, category, account: from } = req.body;
+    const contract = await getProductContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'Product contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    if (!name || !description || !price) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, description, and price are required'
+      });
+    }
+
+    const priceValue = Number(price);
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be a valid number greater than 0'
+      });
+    }
+
+    if (priceValue > MAX_PRODUCT_PRICE_ETH) {
+      return res.status(400).json({
+        success: false,
+        message: `Price must be ${MAX_PRODUCT_PRICE_ETH} ETH or less`
+      });
+    }
+
+    const priceWei = web3Instance.utils.toWei(String(price), 'ether');
+    const productId = web3Instance.utils.keccak256(
+      `${name}-${Date.now()}-${from}`
+    );
+    const cleanImage = imageUrl || '/images/default-product.jpeg';
+    const cleanCategory = category || 'Verified';
+    const tx = contract.methods.addProduct(
+      productId,
+      name,
+      description,
+      cleanImage,
+      cleanCategory,
+      priceWei
+    );
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      productId,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing product add:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
+app.post('/api/products/tx/delete', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { productId, account: from } = req.body;
+    const contract = await getProductContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'Product contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID is required'
+      });
+    }
+
+    const tx = contract.methods.removeProduct(productId);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing product delete:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
 });
 
 // Shipping tracker page 
@@ -676,9 +1499,10 @@ function getCart(req) {
   return req.session.cart;
 }
 
-app.post('/cart/add', requireLogin, (req, res) => {
+app.post('/cart/add', requireLogin, async (req, res) => {
   const { productId, quantity } = req.body;
-  const product = products.find((item) => item.id === productId);
+  const liveProducts = await getProductsForView();
+  const product = liveProducts.find((item) => item.id === productId);
   if (!product) {
     return res.status(404).send('Product not found');
   }
@@ -687,25 +1511,27 @@ app.post('/cart/add', requireLogin, (req, res) => {
   const cart = getCart(req);
   cart.items[productId] = (cart.items[productId] || 0) + qty;
   req.session.cart = cart;
+  syncCartToStore(req);
   return res.redirect('/cart');
 });
 
-app.get('/cart', requireLogin, (req, res) => {
-  const cart = getCart(req);
-  const cartItems = Object.keys(cart.items).map((id) => {
-    const product = products.find((item) => item.id === id);
-    if (!product) {
-      return null;
-    }
-    return {
-      product,
-      quantity: cart.items[id]
-    };
-  }).filter(Boolean);
+app.get('/cart', requireLogin, async (req, res) => {
+  const { cartItems, totalEth } = await buildCartSummary(req);
 
   res.render('cart', {
     acct: account,
-    cartItems: cartItems
+    cartItems: cartItems,
+    totalEth: totalEth
+  });
+});
+
+app.get('/checkout', requireLogin, async (req, res) => {
+  const { cartItems, totalEth } = await buildCartSummary(req);
+  res.render('checkout', {
+    acct: account,
+    cartItems,
+    totalEth,
+    userEmail: req.session && req.session.user ? req.session.user.email : null
   });
 });
 
@@ -716,11 +1542,13 @@ app.post('/cart/remove', requireLogin, (req, res) => {
     delete cart.items[productId];
   }
   req.session.cart = cart;
+  syncCartToStore(req);
   return res.redirect('/cart');
 });
 
 app.post('/cart/clear', requireLogin, (req, res) => {
   req.session.cart = { items: {} };
+  syncCartToStore(req);
   return res.redirect('/cart');
 });
 
@@ -763,11 +1591,26 @@ app.post('/web3Connect', express.json(), async (req, res) => {
     const resolvedProviderUrl = providerUrl || WEB3_PROVIDER_URL || 'http://localhost:8545';
     web3Instance = new Web3(resolvedProviderUrl);
     
-    if (contractAddress) {
+    let resolvedContractAddress = contractAddress;
+    let contractJSON = null;
+    try {
+      contractJSON = JSON.parse(
+        fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')
+      );
+    } catch (readErr) {
+      contractJSON = null;
+    }
+
+    if (!resolvedContractAddress && contractJSON) {
+      const networkId = await web3Instance.eth.net.getId();
+      const networkData = contractJSON.networks ? contractJSON.networks[networkId] : null;
+      resolvedContractAddress = networkData && networkData.address ? networkData.address : "";
+    }
+
+    if (resolvedContractAddress && contractJSON && contractJSON.abi) {
       // Load contract ABI
-      const contractABI = JSON.parse(fs.readFileSync('public/build/ShippingTrackerContract.json', 'utf8')).abi;
-      contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
-      
+      contractInstance = new web3Instance.eth.Contract(contractJSON.abi, resolvedContractAddress);
+
       // Get shipment count
       const count = await contractInstance.methods.getShipmentCount().call();
       shipmentCount = parseInt(count);
@@ -843,12 +1686,11 @@ app.post('/createShipment', express.json(), async (req, res) => {
   try {
     const {
       trackingId,
-      senderName,
-      senderAddress,
       recipientName,
       recipientAddress,
       itemDescription,
-      shipmentValue
+      shipmentValue,
+      useCartTotal
     } = req.body;
     
     if (!contractInstance) {
@@ -866,40 +1708,69 @@ app.post('/createShipment', express.json(), async (req, res) => {
       });
     }
     
-    // Validate shipment value is positive
-    if (parseFloat(shipmentValue) <= 0) {
+    // Resolve shipment value from cart when requested
+    let resolvedShipmentValue = shipmentValue;
+    if (useCartTotal) {
+      const summary = await buildCartSummary(req);
+      if (!summary.cartItems || summary.cartItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cart is empty'
+        });
+      }
+      resolvedShipmentValue = summary.totalEth;
+    }
+
+    const shipmentValueNum = parseFloat(resolvedShipmentValue);
+    if (!Number.isFinite(shipmentValueNum) || shipmentValueNum <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Shipment value must be greater than 0'
       });
     }
+    if (shipmentValueNum > MAX_PRODUCT_PRICE_ETH) {
+      return res.status(400).json({
+        success: false,
+        message: `Shipment value must be ${MAX_PRODUCT_PRICE_ETH} ETH or less`
+      });
+    }
     
     // Call smart contract method
+    const senderName = "TrustedLedger Seller";
+    const senderAddress = "Seller warehouse";
+    const safeRecipientName = recipientName && recipientName.trim()
+      ? recipientName.trim()
+      : "Marketplace Customer";
+    const safeRecipientAddress = recipientAddress && recipientAddress.trim()
+      ? recipientAddress.trim()
+      : "Address on file";
+
     const tx = contractInstance.methods.createShipment(
       trackingId,
       senderName,
       senderAddress,
-      recipientName,
-      recipientAddress,
+      safeRecipientName,
+      safeRecipientAddress,
       itemDescription,
-      web3Instance.utils.toWei(shipmentValue.toString(), 'ether')
+      web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether')
     );
     
     // Prepare transaction for MetaMask
-    const value = web3Instance.utils.toWei(shipmentValue.toString(), 'ether');
+    const value = web3Instance.utils.toWei(String(resolvedShipmentValue), 'ether');
     const gasEstimate = await tx.estimateGas({ from: account, value: value });
-    const gasPrice = await web3Instance.eth.getGasPrice();
+    const gasPrice = await getPreferredGasPrice();
     
     const txData = {
       from: account,
       to: contractInstance.options.address,
       data: tx.encodeABI(),
-      value: value,
-      gas: gasEstimate.toString(),
-      gasPrice: gasPrice.toString()
+      value: toHexQuantity(value),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
     };
     
     console.log('Shipment creation requested:', trackingId);
+    console.log('Shipment value ETH:', resolvedShipmentValue, 'wei:', value, 'tx value:', toHexQuantity(value));
     
     res.json({
       success: true,
@@ -908,7 +1779,8 @@ app.post('/createShipment', express.json(), async (req, res) => {
       trackingId: trackingId,
       seller: sellerAddress,
       estimatedGas: gasEstimate.toString(),
-      estimatedGasPrice: gasPrice.toString()
+      estimatedGasPrice: gasPrice ? gasPrice.toString() : "auto",
+      resolvedShipmentValue: String(resolvedShipmentValue)
     });
   } catch (error) {
     console.error('Error creating shipment:', error);
@@ -1089,8 +1961,8 @@ app.post('/updateStatus/:trackingId', express.json(), async (req, res) => {
       from: account,
       to: contractInstance.options.address,
       data: tx.encodeABI(),
-      gas: gasEstimate.toString(),
-      gasPrice: gasPrice.toString()
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
     };
     
     console.log('Status update for tracking ID:', trackingId);
@@ -1141,8 +2013,8 @@ app.post('/confirmDelivery/:trackingId', express.json(), async (req, res) => {
       from: account,
       to: contractInstance.options.address,
       data: tx.encodeABI(),
-      gas: gasEstimate,
-      gasPrice: gasPrice
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
     };
     
     console.log('Delivery confirmation for tracking ID:', trackingId);
@@ -1158,6 +2030,359 @@ app.post('/confirmDelivery/:trackingId', express.json(), async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message
+    });
+  }
+});
+
+// Buyer confirms delivery with optional review/comment/photo hash
+app.post('/confirmDeliveryByBuyer/:trackingId', express.json(), async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+    const { rating, commentHash, photoHash } = req.body || {};
+
+    if (!contractInstance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Web3 not connected'
+      });
+    }
+
+    if (!trackingId || trackingId.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Tracking ID cannot be empty'
+      });
+    }
+
+    const ratingValue = Number.isFinite(Number(rating)) ? Number(rating) : 0;
+    if (ratingValue < 0 || ratingValue > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be between 0-5'
+      });
+    }
+
+    const tx = contractInstance.methods.confirmDeliveryByBuyer(
+      trackingId,
+      ratingValue,
+      String(commentHash || ""),
+      String(photoHash || "")
+    );
+
+    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    const txData = {
+      from: account,
+      to: contractInstance.options.address,
+      data: tx.encodeABI(),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+    };
+
+    return res.json({
+      success: true,
+      message: 'Delivery confirmation prepared',
+      txData: txData
+    });
+  } catch (error) {
+    console.error('Error confirming delivery by buyer:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to confirm delivery'
+    });
+  }
+});
+
+// Prepare on-chain review transaction
+app.post('/api/reviews/tx', express.json(), async (req, res) => {
+  try {
+    const { productId, trackingId, rating, commentHash, photoHash } = req.body || {};
+    if (!productId || !trackingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing productId or trackingId'
+      });
+    }
+
+    const reviewContract = await getReviewContract();
+    if (!reviewContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Review contract not available'
+      });
+    }
+
+    const ratingValue = Number.isFinite(Number(rating)) ? Number(rating) : 0;
+    if (ratingValue < 0 || ratingValue > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be between 0-5'
+      });
+    }
+
+    const purchaseId = web3Instance.utils.keccak256(String(trackingId));
+    const deliveryTxHash = web3Instance.utils.keccak256(`delivery:${trackingId}`);
+
+    const tx = reviewContract.methods.submitReview(
+      productId,
+      purchaseId,
+      ratingValue,
+      String(commentHash || ""),
+      String(photoHash || ""),
+      deliveryTxHash
+    );
+
+    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    const txData = {
+      from: account,
+      to: reviewContract.options.address,
+      data: tx.encodeABI(),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+    };
+
+    return res.json({
+      success: true,
+      message: 'Review transaction prepared',
+      txData
+    });
+  } catch (error) {
+    console.error('Error preparing review tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare review transaction'
+    });
+  }
+});
+
+// Prepare seller reputation update transaction
+app.post('/api/reputation/tx', express.json(), async (req, res) => {
+  try {
+    const { seller, trackingId, rating } = req.body || {};
+    if (!seller || !trackingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing seller or trackingId'
+      });
+    }
+
+    const reputationContract = await getReputationContract();
+    if (!reputationContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Reputation contract not available'
+      });
+    }
+
+    const ratingValue = Number.isFinite(Number(rating)) ? Number(rating) : 0;
+    if (ratingValue < 1 || ratingValue > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be between 1-5'
+      });
+    }
+
+    const orderId = web3Instance.utils.keccak256(String(trackingId));
+    const tx = reputationContract.methods.rateSeller(
+      seller,
+      orderId,
+      ratingValue,
+      ratingValue,
+      ratingValue,
+      ratingValue
+    );
+
+    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    const txData = {
+      from: account,
+      to: reputationContract.options.address,
+      data: tx.encodeABI(),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+    };
+
+    return res.json({
+      success: true,
+      message: 'Reputation transaction prepared',
+      txData
+    });
+  } catch (error) {
+    console.error('Error preparing reputation tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare reputation transaction'
+    });
+  }
+});
+
+app.post('/api/invoices/tx/register', express.json(), async (req, res) => {
+  try {
+    const { trackingId, invoiceHash } = req.body || {};
+    if (!trackingId || !invoiceHash) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing trackingId or invoiceHash'
+      });
+    }
+
+    const notaryContract = await getNotaryContract();
+    if (!notaryContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Document notary contract not available'
+      });
+    }
+
+    const hashValue = String(invoiceHash).startsWith("0x")
+      ? String(invoiceHash)
+      : `0x${String(invoiceHash)}`;
+
+    const tx = notaryContract.methods.registerInvoice(trackingId, hashValue);
+    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    const txData = {
+      from: account,
+      to: notaryContract.options.address,
+      data: tx.encodeABI(),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+    };
+
+    return res.json({
+      success: true,
+      message: 'Invoice registration prepared',
+      txData
+    });
+  } catch (error) {
+    console.error('Error preparing invoice registration:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare invoice registration'
+    });
+  }
+});
+
+app.post('/api/invoices/tx/attest', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { trackingId, authentic } = req.body || {};
+    if (!trackingId || authentic === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing trackingId or authentic flag'
+      });
+    }
+
+    const notaryContract = await getNotaryContract();
+    if (!notaryContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Document notary contract not available'
+      });
+    }
+
+    const tx = notaryContract.methods.attestInvoice(trackingId, Boolean(authentic));
+    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasPrice = await web3Instance.eth.getGasPrice();
+
+    const txData = {
+      from: account,
+      to: notaryContract.options.address,
+      data: tx.encodeABI(),
+      gas: toHexQuantity(gasEstimate),
+      ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+    };
+
+    return res.json({
+      success: true,
+      message: 'Invoice attestation prepared',
+      txData
+    });
+  } catch (error) {
+    console.error('Error preparing invoice attestation:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare invoice attestation'
+    });
+  }
+});
+
+app.post('/api/invoices/verify', upload.single('invoice'), async (req, res) => {
+  try {
+    const trackingId = String(req.body.trackingId || "");
+    if (!trackingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'TrackingId required'
+      });
+    }
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invoice file required'
+      });
+    }
+
+    const notaryContract = await getNotaryContract();
+    if (!notaryContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Document notary contract not available'
+      });
+    }
+
+    const hashHex = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+    const onChain = await notaryContract.methods.getInvoice(trackingId).call();
+    const chainHash = String(onChain.invoiceHash || "").toLowerCase();
+    const submittedHash = `0x${hashHex}`.toLowerCase();
+    const authentic = chainHash && chainHash !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ? chainHash === submittedHash
+      : false;
+
+    return res.json({
+      success: true,
+      authentic,
+      invoiceHash: submittedHash,
+      chainHash,
+      status: Number(onChain.status || 0)
+    });
+  } catch (error) {
+    console.error('Error verifying invoice:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to verify invoice'
+    });
+  }
+});
+
+app.get('/api/invoices/:trackingId', async (req, res) => {
+  try {
+    const trackingId = String(req.params.trackingId || "");
+    if (!trackingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'TrackingId required'
+      });
+    }
+    const notaryContract = await getNotaryContract();
+    if (!notaryContract) {
+      return res.status(500).json({
+        success: false,
+        message: 'Document notary contract not available'
+      });
+    }
+    const invoice = await notaryContract.methods.getInvoice(trackingId).call();
+    return res.json({ success: true, invoice });
+  } catch (error) {
+    console.error('Error loading invoice:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load invoice'
     });
   }
 });

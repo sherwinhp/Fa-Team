@@ -185,6 +185,9 @@
       <a href="/products" class="nav-link">Products</a>
 
       <% if (isLoggedIn) { %>
+      <a href="/orders" class="nav-link">
+        <span class="icon">📦</span> Orders
+      </a>
       <a href="/wallet" class="nav-link">
         <span class="icon">👛</span> Wallet
       </a>
@@ -241,6 +244,7 @@
     let isConnected = false;
     let currentAccount = "";
     let manualDisconnect = false;
+    const storageKey = "walletConnected";
 
     if (!connectButton) {
       return;
@@ -260,9 +264,12 @@
     const allowedAccounts = safeParse(connectButton.dataset.allowed, [])
       .map((item) => String(item || "").toLowerCase())
       .filter(Boolean);
-    const allowedChainIds = safeParse(connectButton.dataset.chainids, [])
+    let allowedChainIds = safeParse(connectButton.dataset.chainids, [])
       .map((item) => String(item || "").toLowerCase())
       .filter(Boolean);
+    if (!allowedChainIds.length) {
+      allowedChainIds = ["1337", "5777"];
+    }
     const providerUrl = connectButton.dataset.provider || "";
 
     const toHexChainId = (value) => {
@@ -335,11 +342,16 @@
         setStatus("Not connected", false);
         return;
       }
+      if (sessionStorage.getItem(storageKey) !== "true") {
+        setStatus("Not connected", false);
+        return;
+      }
       try {
         const accounts = await window.ethereum.request({ method: "eth_accounts" });
         const active = accounts && accounts[0] ? accounts[0] : "";
         if (!active) {
           currentAccount = "";
+          sessionStorage.removeItem(storageKey);
           setStatus("Not connected", false);
           return;
         }
@@ -353,6 +365,7 @@
         setStatus(`${shortAddress(active)}`, true, active);
       } catch (err) {
         currentAccount = "";
+        sessionStorage.removeItem(storageKey);
         setStatus("Not connected", false);
       }
     };
@@ -383,6 +396,7 @@
         }
 
         currentAccount = account;
+        sessionStorage.setItem(storageKey, "true");
         setStatus(`${shortAddress(account)}`, true, account);
 
         try {
@@ -420,6 +434,7 @@
     const disconnectWallet = async () => {
       manualDisconnect = true;
       currentAccount = "";
+      sessionStorage.removeItem(storageKey);
       if (window.ethereum && window.ethereum.request) {
         try {
           await window.ethereum.request({

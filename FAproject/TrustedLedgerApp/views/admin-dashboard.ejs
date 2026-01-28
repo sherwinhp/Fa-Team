@@ -293,7 +293,7 @@
         <div class="stat-card">
           <div>
             <h4>Total Products</h4>
-            <div class="value">5</div>
+            <div class="value"><%= products ? products.length : 0 %></div>
           </div>
           <div class="stat-icon icon-blue">▣</div>
         </div>
@@ -332,70 +332,32 @@
       <section class="panel panel-section active" data-panel="products">
         <div class="panel-header">
           <h3>Product Management</h3>
-          <button class="btn" type="button">Add Product</button>
+          <a class="btn" href="/addproduct">Add Product</a>
         </div>
         <input class="search" placeholder="Search products..." />
         <div class="list">
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e" alt="Product" />
-            <div>
-              <h4>Premium Wireless Headphones <span class="pill">Electronics</span></h4>
-              <p>Premium ANC headphones with 30h battery life and superior sound quality.</p>
-              <p>$299.99 &nbsp;&nbsp; Stock 45 &nbsp;&nbsp; ID: 1</p>
+          <% if (products && products.length) { %>
+            <% products.forEach((product) => { %>
+              <div class="row">
+                <img class="thumb" src="<%= product.images && product.images.length ? product.images[0] : '/images/default-product.jpeg' %>" alt="Product" />
+                <div>
+                  <h4><%= product.productInfo.name %> <span class="pill"><%= product.productInfo.category %></span></h4>
+                  <p><%= product.productInfo.description %></p>
+                  <p>$<%= product.productInfo.price %> ETHR &nbsp;&nbsp; Stock <%= product.stock %> &nbsp;&nbsp; ID: <%= product.id %></p>
+                </div>
+                <div class="action-buttons">
+                  <button class="icon-btn delete-product" type="button" data-product-id="<%= product.id %>">Del</button>
+                </div>
+              </div>
+            <% }) %>
+          <% } else { %>
+            <div class="row">
+              <div>
+                <h4>No products on-chain yet.</h4>
+                <p>Add a product to initialize the on-chain catalog.</p>
+              </div>
             </div>
-            <div class="action-buttons">
-              <button class="icon-btn" type="button">✎</button>
-              <button class="icon-btn" type="button">🗑</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1540555700478-4be289fbecef" alt="Product" />
-            <div>
-              <h4>Organic Skincare Gift Set <span class="pill">Beauty &amp; Health</span></h4>
-              <p>100% organic skincare collection with natural ingredients.</p>
-              <p>$89.9 &nbsp;&nbsp; Stock 78 &nbsp;&nbsp; ID: 2</p>
-            </div>
-            <div class="action-buttons">
-              <button class="icon-btn" type="button">✎</button>
-              <button class="icon-btn" type="button">🗑</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1519389950473-47ba0277781c" alt="Product" />
-            <div>
-              <h4>Smart Fitness Tracker Watch <span class="pill">Fitness &amp; Sports</span></h4>
-              <p>Advanced fitness tracker with heart rate monitoring and GPS.</p>
-              <p>$159 &nbsp;&nbsp; Stock 120 &nbsp;&nbsp; ID: 3</p>
-            </div>
-            <div class="action-buttons">
-              <button class="icon-btn" type="button">✎</button>
-              <button class="icon-btn" type="button">🗑</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1509042239860-f550ce710b93" alt="Product" />
-            <div>
-              <h4>Artisan Coffee Bean Collection <span class="pill">Food &amp; Beverage</span></h4>
-              <p>Premium single-origin coffee beans from around the world.</p>
-              <p>$45.5 &nbsp;&nbsp; Stock 95 &nbsp;&nbsp; ID: 4</p>
-            </div>
-            <div class="action-buttons">
-              <button class="icon-btn" type="button">✎</button>
-              <button class="icon-btn" type="button">🗑</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab" alt="Product" />
-            <div>
-              <h4>Minimalist Leather Backpack <span class="pill">Fashion &amp; Accessories</span></h4>
-              <p>Handcrafted full-grain leather backpack with laptop compartment.</p>
-              <p>$189 &nbsp;&nbsp; Stock 32 &nbsp;&nbsp; ID: 5</p>
-            </div>
-            <div class="action-buttons">
-              <button class="icon-btn" type="button">✎</button>
-              <button class="icon-btn" type="button">🗑</button>
-            </div>
-          </div>
+          <% } %>
         </div>
       </section>
 
@@ -403,44 +365,11 @@
         <div class="panel-header">
           <h3>Order Management</h3>
         </div>
-        <div class="list">
+        <div class="list" id="orderList">
           <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e" alt="Order" />
             <div>
-              <h4>Premium Wireless Headphones</h4>
-              <p>ORD-2025-001</p>
-              <p>28/11/2025, 6:30:00 pm</p>
-            </div>
-            <div>
-              <p>Amount</p>
-              <p><strong>$299.99 ETHR</strong> <span class="pill" style="background:#ecfdf3;color:#16a34a;">delivered</span></p>
-              <button class="btn-outline" type="button">View Details</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1540555700478-4be289fbecef" alt="Order" />
-            <div>
-              <h4>Organic Skincare Gift Set</h4>
-              <p>ORD-2025-002</p>
-              <p>01/12/2025, 5:15:00 pm</p>
-            </div>
-            <div>
-              <p>Amount</p>
-              <p><strong>$89.9 ETHR</strong> <span class="pill" style="background:#ede9fe;color:#7c3aed;">shipped</span></p>
-              <button class="btn-outline" type="button">View Details</button>
-            </div>
-          </div>
-          <div class="row">
-            <img class="thumb" src="https://images.unsplash.com/photo-1519389950473-47ba0277781c" alt="Order" />
-            <div>
-              <h4>Smart Fitness Tracker Watch</h4>
-              <p>ORD-2025-003</p>
-              <p>02/12/2025, 7:20:00 pm</p>
-            </div>
-            <div>
-              <p>Amount</p>
-              <p><strong>$159 ETHR</strong> <span class="pill" style="background:#fef9c3;color:#ca8a04;">pending</span></p>
-              <button class="btn-outline" type="button">View Details</button>
+              <h4>Loading orders...</h4>
+              <p>Connect MetaMask with the admin account to view on-chain orders.</p>
             </div>
           </div>
         </div>
@@ -523,6 +452,206 @@
           }
         });
       });
-    </script>
+    
+
+      const deleteButtons = Array.from(document.querySelectorAll(".delete-product"));
+      const orderList = document.getElementById("orderList");
+      const allowedChains = ["0x539", "0x1691"];
+
+      const getConnectedAccount = async () => {
+        if (window.appWallet && window.appWallet.isConnected()) {
+          return window.appWallet.getAccount();
+        }
+        if (window.appWallet) {
+          const result = await window.appWallet.connect();
+          return result && result.account ? result.account : "";
+        }
+        if (window.ethereum) {
+          const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+          return accounts && accounts[0] ? accounts[0] : "";
+        }
+        return "";
+      };
+
+      const ensureGanacheChain = async () => {
+        if (!window.ethereum) {
+          return false;
+        }
+        const chainId = await window.ethereum.request({ method: "eth_chainId" });
+        return chainId && allowedChains.includes(String(chainId).toLowerCase());
+      };
+
+      const renderOrders = (orders) => {
+        if (!orderList) {
+          return;
+        }
+        if (!orders || !orders.length) {
+          orderList.innerHTML = `
+            <div class="row">
+              <div>
+                <h4>No orders yet.</h4>
+                <p>Orders will appear after customers complete checkout.</p>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        orderList.innerHTML = orders.map((order) => {
+          const badgeStyle = order.statusLabel === "Delivered"
+            ? "background:#ecfdf3;color:#16a34a;"
+            : order.statusLabel === "Failed"
+              ? "background:#fee2e2;color:#dc2626;"
+              : "background:#fef9c3;color:#ca8a04;";
+          return `
+            <div class="row">
+              <div>
+                <h4>${order.itemDescription || "Order"} <span class="pill">${order.trackingId}</span></h4>
+                <p>Buyer: ${order.buyer}</p>
+                <p>${new Date(order.createdAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <p>Amount</p>
+                <p><strong>${order.shipmentValue} ETH</strong> <span class="pill" style="${badgeStyle}">${order.statusLabel}</span></p>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                  <select data-status-select="${order.trackingId}" class="btn-outline">
+                    <option value="0">Pending</option>
+                    <option value="1">Picked Up</option>
+                    <option value="2">In Transit</option>
+                    <option value="3">Out For Delivery</option>
+                    <option value="4">Delivered</option>
+                    <option value="5">Failed</option>
+                  </select>
+                  <button class="btn-outline" data-update-status="${order.trackingId}">Update</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      };
+
+      const loadOrders = async () => {
+        if (!orderList) {
+          return;
+        }
+        try {
+          const response = await fetch("/api/orders");
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            orderList.innerHTML = `
+              <div class="row">
+                <div>
+                  <h4>Unable to load orders.</h4>
+                  <p>${payload.message || "Connect MetaMask and retry."}</p>
+                </div>
+              </div>
+            `;
+            return;
+          }
+          renderOrders(payload.orders);
+        } catch (err) {
+          orderList.innerHTML = `
+            <div class="row">
+              <div>
+                <h4>Unable to load orders.</h4>
+                <p>${err.message || "Try again later."}</p>
+              </div>
+            </div>
+          `;
+        }
+      };
+
+      deleteButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          const productId = button.dataset.productId;
+          if (!productId) {
+            return;
+          }
+          if (!confirm("Remove this product from the on-chain catalog?")) {
+            return;
+          }
+
+          const account = await getConnectedAccount();
+          if (!account) {
+            alert("Connect MetaMask to delete products.");
+            return;
+          }
+          const onChain = await ensureGanacheChain();
+          if (!onChain) {
+            alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+            return;
+          }
+
+          try {
+            const response = await fetch("/api/products/tx/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productId, account })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              alert(payload.message || "Unable to prepare delete transaction.");
+              return;
+            }
+            await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [payload.txData]
+            });
+            window.location.reload();
+          } catch (error) {
+            alert(error.message || "Unable to delete product.");
+          }
+        });
+      });
+
+      if (orderList) {
+        orderList.addEventListener("click", async (event) => {
+          const target = event.target;
+          if (!target || !(target instanceof HTMLElement)) {
+            return;
+          }
+          const trackingId = target.getAttribute("data-update-status");
+          if (!trackingId) {
+            return;
+          }
+          const account = await getConnectedAccount();
+          if (!account) {
+            alert("Connect MetaMask to update orders.");
+            return;
+          }
+          const onChain = await ensureGanacheChain();
+          if (!onChain) {
+            alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+            return;
+          }
+          const select = orderList.querySelector(`[data-status-select="${trackingId}"]`);
+          const status = select ? Number(select.value) : 0;
+          const location = "Admin update";
+          const notes = "Status updated by admin";
+
+          try {
+            const response = await fetch(`/updateStatus/${encodeURIComponent(trackingId)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status, location, notes })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              alert(payload.message || "Unable to prepare status update.");
+              return;
+            }
+            await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [payload.txData]
+            });
+            await loadOrders();
+          } catch (err) {
+            alert(err.message || "Unable to update order.");
+          }
+        });
+      }
+
+      loadOrders();
+</script>
   </body>
 </html>

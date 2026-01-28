@@ -332,7 +332,7 @@
           <span style="font-size:18px;">🛡️</span>
           <div>
             All tracking updates are recorded on the blockchain and cannot be tampered with.
-            Payment will be automatically released to the seller upon delivery confirmation.
+            Payment will be automatically released to the seller when the admin marks delivery as completed.
           </div>
         </div>
       </section>
@@ -383,7 +383,30 @@
           <div class="sectionTitle">Admin Actions</div>
           <div class="checkList">
             <button class="pill" id="markDeliveredButton" type="button">Mark Delivered</button>
-            <button class="pill" id="releasePaymentButton" type="button">Release Payment</button>
+          </div>
+        <% } %>
+
+        <% if (userRole !== 'admin') { %>
+          <div class="sectionTitle">Confirm Delivery</div>
+          <div class="checkList" style="gap:12px;">
+            <label style="font-size:13px;color:var(--muted);">Product (for review)</label>
+            <select id="deliveryProduct" class="pill" style="border-radius:10px;">
+              <option value="">Select a product</option>
+            </select>
+            <label style="font-size:13px;color:var(--muted);">Rating (optional)</label>
+            <select id="deliveryRating" class="pill" style="border-radius:10px;">
+              <option value="0">No rating</option>
+              <option value="1">1 - Poor</option>
+              <option value="2">2 - Fair</option>
+              <option value="3">3 - Good</option>
+              <option value="4">4 - Very Good</option>
+              <option value="5">5 - Excellent</option>
+            </select>
+            <label style="font-size:13px;color:var(--muted);">Comment (optional)</label>
+            <textarea id="deliveryComment" rows="3" style="width:100%;border-radius:12px;border:1px solid var(--line);padding:10px;"></textarea>
+            <label style="font-size:13px;color:var(--muted);">Photo URL / Hash (optional)</label>
+            <input id="deliveryPhoto" type="text" style="width:100%;border-radius:12px;border:1px solid var(--line);padding:10px;" />
+            <button class="pill" id="confirmDeliveryButton" type="button">Confirm Delivery</button>
           </div>
         <% } %>
       </section>
@@ -400,7 +423,13 @@
     const el = (id) => document.getElementById(id);
     const statusBar = document.getElementById("statusBar");
     const markDeliveredButton = document.getElementById("markDeliveredButton");
-    const releasePaymentButton = document.getElementById("releasePaymentButton");
+    const confirmDeliveryButton = document.getElementById("confirmDeliveryButton");
+    const deliveryProduct = document.getElementById("deliveryProduct");
+    const deliveryRating = document.getElementById("deliveryRating");
+    const deliveryComment = document.getElementById("deliveryComment");
+    const deliveryPhoto = document.getElementById("deliveryPhoto");
+    const allowedChains = ["0x539", "0x1691"];
+    let currentShipment = null;
 
     const statusSteps = [
       "Pending",
@@ -476,6 +505,7 @@
       }
  
       const data = await res.json();
+      currentShipment = data || null;
       renderStatusBar(data.currentStatus);
  
       el("contractId").textContent = data.smartContractId || "—";
@@ -486,8 +516,39 @@
  
       el("timeline").innerHTML = (data.events || []).map(tlItemHTML).join("");
     }
- 
+
     loadTracking();
+    setInterval(loadTracking, 10000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        loadTracking();
+      }
+    });
+
+    function loadOrderItems(){
+      if(!deliveryProduct){
+        return;
+      }
+      const raw = localStorage.getItem(`order:${trackingId}`);
+      if(!raw){
+        return;
+      }
+      try{
+        const payload = JSON.parse(raw);
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        if(!items.length){
+          return;
+        }
+        deliveryProduct.innerHTML = items.map((item, index) => {
+          const label = item.name || `Product ${index + 1}`;
+          return `<option value="${item.id}">${label}</option>`;
+        }).join("");
+      }catch(err){
+        // ignore
+      }
+    }
+
+    loadOrderItems();
 
     async function sendTransaction(txData){
       if(!window.ethereum){
@@ -504,8 +565,21 @@
       }
     }
 
+    async function ensureGanacheChain(){
+      if(!window.ethereum){
+        return false;
+      }
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      return chainId && allowedChains.includes(String(chainId).toLowerCase());
+    }
+
     if(markDeliveredButton){
       markDeliveredButton.addEventListener("click", async () => {
+        const onChain = await ensureGanacheChain();
+        if(!onChain){
+          alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+          return;
+        }
         const payload = {
           status: 4,
           location: "Recipient address",
@@ -524,16 +598,65 @@
       });
     }
 
-    if(releasePaymentButton){
-      releasePaymentButton.addEventListener("click", async () => {
-        const res = await fetch(`/confirmDelivery/${encodeURIComponent(trackingId)}`, {
+    if(confirmDeliveryButton){
+      confirmDeliveryButton.addEventListener("click", async () => {
+        const onChain = await ensureGanacheChain();
+        if(!onChain){
+          alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+          return;
+        }
+        const payload = {
+          rating: deliveryRating ? Number(deliveryRating.value) : 0,
+          commentHash: deliveryComment ? deliveryComment.value.trim() : "",
+          photoHash: deliveryPhoto ? deliveryPhoto.value.trim() : ""
+        };
+        const res = await fetch(`/confirmDeliveryByBuyer/${encodeURIComponent(trackingId)}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" }
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if(data && data.txData){
           await sendTransaction(data.txData);
+          const ratingValue = payload.rating || 0;
+          const productId = deliveryProduct ? deliveryProduct.value : "";
+          const hasReviewData = ratingValue > 0 || payload.commentHash || payload.photoHash;
+          if (productId && hasReviewData) {
+            const reviewRes = await fetch("/api/reviews/tx", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                productId,
+                trackingId,
+                rating: ratingValue,
+                commentHash: payload.commentHash,
+                photoHash: payload.photoHash
+              })
+            });
+            const reviewPayload = await reviewRes.json();
+            if (reviewPayload && reviewPayload.txData) {
+              await sendTransaction(reviewPayload.txData);
+            }
+
+            if (ratingValue > 0 && currentShipment && currentShipment.seller) {
+              const repRes = await fetch("/api/reputation/tx", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  seller: currentShipment.seller,
+                  trackingId,
+                  rating: ratingValue
+                })
+              });
+              const repPayload = await repRes.json();
+              if (repPayload && repPayload.txData) {
+                await sendTransaction(repPayload.txData);
+              }
+            }
+          }
           loadTracking();
+        } else {
+          alert(data && data.message ? data.message : "Unable to confirm delivery.");
         }
       });
     }

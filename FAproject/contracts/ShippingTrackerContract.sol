@@ -76,6 +76,24 @@ contract ShippingTrackerContract {
     mapping(string => ShipmentTracking) public shipments;
     mapping(address => string[]) public sellerShipments;
     mapping(address => string[]) public buyerShipments;
+
+    struct DeliveryConfirmation {
+        address buyer;
+        uint8 rating;
+        string commentHash;
+        string photoHash;
+        uint256 timestamp;
+    }
+
+    mapping(string => DeliveryConfirmation) public deliveryConfirmations;
+
+    event DeliveryConfirmed(
+        string indexed trackingId,
+        address indexed buyer,
+        uint8 rating,
+        string commentHash,
+        string photoHash
+    );
  
 
 // View does not modify the state variable welcomeMessage
@@ -162,6 +180,10 @@ contract ShippingTrackerContract {
             block.timestamp,
             _notes
         ));
+
+        if (_newStatus == DeliveryStatus.Delivered && !shipments[_trackingId].shipment.paymentReleased) {
+            _releasePayment(_trackingId);
+        }
         
         return true;
     }
@@ -172,24 +194,32 @@ contract ShippingTrackerContract {
         require(!shipments[_trackingId].shipment.paymentReleased, "Payment already released");
         require(shipments[_trackingId].currentStatus == DeliveryStatus.Delivered, "Shipment not yet delivered");
         
-        // Mark shipment as paid
-        shipments[_trackingId].shipment.paymentReleased = true;
+        _releasePayment(_trackingId);
         
-        // Transfer payment to seller
-        uint256 amount = shipments[_trackingId].shipment.shipmentValue;
-        escrowBalance -= amount;
-        
-        (bool success, ) = payable(shipments[_trackingId].shipment.seller).call{value: amount}("");
-        require(success, "Payment transfer failed");
-        
-        // Add final tracking update
-        shipments[_trackingId].updates.push(TrackingUpdate(
-            DeliveryStatus.Delivered,
-            shipments[_trackingId].shipment.recipientAddress,
-            block.timestamp,
-            "Delivery confirmed. Payment released to seller."
-        ));
-        
+        return true;
+    }
+
+    function confirmDeliveryByBuyer(
+        string memory _trackingId,
+        uint8 _rating,
+        string memory _commentHash,
+        string memory _photoHash
+    ) public returns (bool) {
+        require(bytes(shipments[_trackingId].shipment.trackingId).length != 0, "Shipment not found");
+        require(shipments[_trackingId].shipment.currentStatus == DeliveryStatus.Delivered, "Shipment not delivered");
+        require(msg.sender == shipments[_trackingId].shipment.buyer, "Only buyer");
+        require(deliveryConfirmations[_trackingId].buyer == address(0), "Already confirmed");
+        require(_rating <= 5, "Rating 0-5");
+
+        deliveryConfirmations[_trackingId] = DeliveryConfirmation({
+            buyer: msg.sender,
+            rating: _rating,
+            commentHash: _commentHash,
+            photoHash: _photoHash,
+            timestamp: block.timestamp
+        });
+
+        emit DeliveryConfirmed(_trackingId, msg.sender, _rating, _commentHash, _photoHash);
         return true;
     }
     
@@ -224,6 +254,35 @@ contract ShippingTrackerContract {
     // Get escrow balance
     function getEscrowBalance() public view returns (uint256) {
         return escrowBalance;
+    }
+
+    function _releasePayment(string memory _trackingId) internal {
+        ShipmentData storage shipment = shipments[_trackingId].shipment;
+        require(!shipment.paymentReleased, "Payment already released");
+
+        shipment.paymentReleased = true;
+        uint256 amount = shipment.shipmentValue;
+        escrowBalance -= amount;
+
+        (bool success, ) = payable(shipment.seller).call{value: amount}("");
+        require(success, "Payment transfer failed");
+
+        uint256 updateCount = shipments[_trackingId].updates.length;
+        bool shouldAppend = true;
+        if (updateCount > 0) {
+            TrackingUpdate storage lastUpdate = shipments[_trackingId].updates[updateCount - 1];
+            if (lastUpdate.status == DeliveryStatus.Delivered) {
+                shouldAppend = false;
+            }
+        }
+        if (shouldAppend) {
+            shipments[_trackingId].updates.push(TrackingUpdate(
+                DeliveryStatus.Delivered,
+                shipment.recipientAddress,
+                block.timestamp,
+                "Delivery confirmed. Payment released to seller."
+            ));
+        }
     }
 }
 

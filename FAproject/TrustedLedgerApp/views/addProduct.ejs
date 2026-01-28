@@ -147,8 +147,9 @@
       <% if (error) { %>
         <div class="error"><%= error %></div>
       <% } %>
+      <div class="error" id="onchainError" style="display: none;"></div>
 
-      <form action="/addproduct" method="POST">
+      <form id="addProductForm" action="/addproduct" method="POST">
         <div class="form-grid">
           <div>
             <label for="name">Product Name *</label>
@@ -200,5 +201,108 @@
       </form>
     </div>
   </div>
+
+  <script>
+    (() => {
+      const form = document.getElementById("addProductForm");
+      const errorBox = document.getElementById("onchainError");
+
+      const showError = (message) => {
+        if (!errorBox) {
+          return;
+        }
+        errorBox.textContent = message;
+        errorBox.style.display = "block";
+      };
+
+      const getPrimaryImage = (value) => {
+        if (!value) {
+          return "";
+        }
+        const parts = value
+          .split(/\r?\n|,/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+        return parts[0] || "";
+      };
+
+      const ensureConnected = async () => {
+        if (window.appWallet && window.appWallet.isConnected()) {
+          return window.appWallet.getAccount();
+        }
+        if (window.appWallet) {
+          const result = await window.appWallet.connect();
+          return result && result.account ? result.account : "";
+        }
+        if (window.ethereum) {
+          const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+          return accounts && accounts[0] ? accounts[0] : "";
+        }
+        return "";
+      };
+
+      if (form) {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (errorBox) {
+            errorBox.style.display = "none";
+          }
+
+          try {
+            const account = await ensureConnected();
+            if (!account) {
+              showError("Connect MetaMask to add products on-chain.");
+              return;
+            }
+
+            const formData = new FormData(form);
+            const name = String(formData.get("name") || "").trim();
+            const description = String(formData.get("description") || "").trim();
+            const price = String(formData.get("price") || "").trim();
+            const category = String(formData.get("category") || "").trim();
+            const imageUrl = getPrimaryImage(String(formData.get("imageUrls") || ""));
+
+            if (!name || !description || !price) {
+              showError("Product name, description, and price are required.");
+              return;
+            }
+
+            const response = await fetch("/api/products/tx/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name,
+                description,
+                price,
+                category,
+                imageUrl,
+                account
+              })
+            });
+
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              showError(payload.message || "Unable to prepare on-chain transaction.");
+              return;
+            }
+
+            if (!window.ethereum) {
+              showError("MetaMask not available to sign the transaction.");
+              return;
+            }
+
+            await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [payload.txData]
+            });
+
+            window.location.href = "/admin";
+          } catch (err) {
+            showError(err.message || "Unable to add product on-chain.");
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

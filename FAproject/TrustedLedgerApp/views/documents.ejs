@@ -93,6 +93,79 @@
         font-size: 14px;
         line-height: 1.6;
       }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      input, select, textarea {
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      .btn {
+        margin-top: 12px;
+        border: none;
+        border-radius: 999px;
+        padding: 10px 16px;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .btn-outline {
+        border: 1px solid #cbd5f5;
+        background: #fff;
+        color: var(--brand);
+        padding: 10px 16px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .status-approved {
+        background: #dcfce7;
+        color: #16a34a;
+      }
+
+      .status-rejected {
+        background: #fee2e2;
+        color: #dc2626;
+      }
+
+      .status-pending {
+        background: #fef9c3;
+        color: #ca8a04;
+      }
     </style>
   </head>
   <body>
@@ -106,10 +179,273 @@
     </section>
 
     <main class="page">
-      <section class="card">
-        <h2>Your secure document vault</h2>
-        <p>Upload and manage shipment documents, certificates, and escrow receipts here.</p>
-      </section>
+      <div class="grid">
+        <section class="card">
+          <h2>Invoice Generator</h2>
+          <p>Generate a PDF invoice and register its hash on-chain.</p>
+          <div class="field">
+            <label for="invoiceTrackingId">Tracking ID</label>
+            <input id="invoiceTrackingId" placeholder="TRK-..." />
+          </div>
+          <div class="field">
+            <label>Invoice status</label>
+            <div id="invoiceStatus" class="status-pill status-pending">Not registered</div>
+          </div>
+          <button class="btn" id="downloadInvoiceBtn" type="button">Download PDF & Register</button>
+        </section>
+
+        <section class="card">
+          <h2>Document Notarization</h2>
+          <p>Upload your invoice PDF for authenticity verification.</p>
+          <div class="field">
+            <label for="verifyTrackingId">Tracking ID</label>
+            <input id="verifyTrackingId" placeholder="TRK-..." />
+          </div>
+          <div class="field">
+            <label for="invoiceFile">Invoice PDF</label>
+            <input id="invoiceFile" type="file" accept="application/pdf" />
+          </div>
+          <button class="btn-outline" id="verifyInvoiceBtn" type="button">Verify Invoice</button>
+          <div class="field">
+            <label>Verification result</label>
+            <div id="verifyResult" class="status-pill status-pending">Waiting</div>
+          </div>
+          <% if (userRole === 'admin') { %>
+            <div class="field" style="display:flex;gap:10px;flex-direction:row;">
+              <button class="btn" id="approveInvoiceBtn" type="button">Approve</button>
+              <button class="btn-outline" id="rejectInvoiceBtn" type="button">Reject</button>
+            </div>
+          <% } %>
+        </section>
+      </div>
     </main>
+
+    <script>
+      const allowedChains = ["0x539", "0x1691"];
+      const invoiceTrackingId = document.getElementById("invoiceTrackingId");
+      const invoiceStatus = document.getElementById("invoiceStatus");
+      const downloadInvoiceBtn = document.getElementById("downloadInvoiceBtn");
+      const verifyTrackingId = document.getElementById("verifyTrackingId");
+      const invoiceFile = document.getElementById("invoiceFile");
+      const verifyInvoiceBtn = document.getElementById("verifyInvoiceBtn");
+      const verifyResult = document.getElementById("verifyResult");
+      const approveInvoiceBtn = document.getElementById("approveInvoiceBtn");
+      const rejectInvoiceBtn = document.getElementById("rejectInvoiceBtn");
+
+      const ensureGanacheChain = async () => {
+        if (!window.ethereum) {
+          return false;
+        }
+        const chainId = await window.ethereum.request({ method: "eth_chainId" });
+        return chainId && allowedChains.includes(String(chainId).toLowerCase());
+      };
+
+      const hashBufferToHex = (buffer) => {
+        return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+      };
+
+      const sha256 = async (data) => {
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        return hashBufferToHex(hashBuffer);
+      };
+
+      const escapePdfText = (text) => String(text || "").replace(/[()\\\\]/g, "\\\\$&");
+
+      const buildPdf = (lines) => {
+        const contentLines = lines.map((line, index) => {
+          const y = 760 - index * 18;
+          return `1 0 0 1 50 ${y} Tm (${escapePdfText(line)}) Tj`;
+        }).join("\\n");
+
+        const stream = `BT /F1 12 Tf\\n${contentLines}\\nET`;
+        const objects = [];
+        objects.push("1 0 obj<< /Type /Catalog /Pages 2 0 R>>endobj");
+        objects.push("2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1>>endobj");
+        objects.push("3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources<< /Font<< /F1 4 0 R>> >> /Contents 5 0 R>>endobj");
+        objects.push("4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica>>endobj");
+        objects.push(`5 0 obj<< /Length ${stream.length}>>stream\\n${stream}\\nendstream endobj`);
+
+        let offset = 0;
+        const xref = ["xref", `0 ${objects.length + 1}`, "0000000000 65535 f "];
+        let body = "%PDF-1.3\\n";
+        objects.forEach((obj) => {
+          xref.push(String(offset).padStart(10, "0") + " 00000 n ");
+          body += obj + "\\n";
+          offset = body.length;
+        });
+        const trailer = `trailer<< /Size ${objects.length + 1} /Root 1 0 R>>\\nstartxref\\n${offset}\\n%%EOF`;
+        return new TextEncoder().encode(body + xref.join("\\n") + "\\n" + trailer);
+      };
+
+      const getOrderItems = (trackingId) => {
+        try {
+          const raw = localStorage.getItem(`order:${trackingId}`);
+          if (!raw) return [];
+          const payload = JSON.parse(raw);
+          return {
+            items: Array.isArray(payload.items) ? payload.items : [],
+            buyerEmail: payload.buyerEmail || "",
+            recipientAddress: payload.recipientAddress || ""
+          };
+        } catch (err) {
+          return { items: [], buyerEmail: "", recipientAddress: "" };
+        }
+      };
+
+      const fetchShipment = async (trackingId) => {
+        const res = await fetch(`/api/shipping/${encodeURIComponent(trackingId)}`);
+        if (!res.ok) return null;
+        return res.json();
+      };
+
+      const setStatus = (el, status) => {
+        el.className = "status-pill " + (status === "Approved"
+          ? "status-approved"
+          : status === "Rejected"
+            ? "status-rejected"
+            : "status-pending");
+        el.textContent = status;
+      };
+
+      const sendTx = async (txData) => {
+        if (!window.ethereum) {
+          alert("MetaMask not detected.");
+          return null;
+        }
+        return window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [txData]
+        });
+      };
+
+      if (downloadInvoiceBtn) {
+        downloadInvoiceBtn.addEventListener("click", async () => {
+          const trackingId = invoiceTrackingId.value.trim();
+          if (!trackingId) {
+            alert("Tracking ID required.");
+            return;
+          }
+          const onChain = await ensureGanacheChain();
+          if (!onChain) {
+            alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+            return;
+          }
+
+          const shipment = await fetchShipment(trackingId);
+          if (!shipment) {
+            alert("Shipment not found.");
+            return;
+          }
+
+          const orderInfo = getOrderItems(trackingId);
+          const items = orderInfo.items || [];
+          const buyerEmail = orderInfo.buyerEmail || "<%= userEmail || '' %>";
+          const recipientAddress = orderInfo.recipientAddress || shipment.recipientAddress || "Address on file";
+          const qrPayload = `${window.location.origin}/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+          const lines = [
+            "TrustedLedger Invoice",
+            "Seller: BlockChain Track",
+            `Tracking ID: ${trackingId}`,
+            `Buyer Wallet: ${shipment.buyer || "Unknown"}`,
+            `Buyer Email: ${buyerEmail || "Unknown"}`,
+            `Delivery Address: ${recipientAddress || "Unknown"}`,
+            `Seller: ${shipment.seller || "Unknown"}`,
+            `Date: ${new Date().toLocaleString()}`,
+            `Amount (ETH): ${shipment.shipmentValue || "0"}`,
+            `QR Payload: ${qrPayload}`,
+            "Items:"
+          ];
+          items.forEach((item, index) => {
+            lines.push(`- ${item.name || `Product ${index + 1}`} (${item.id || "N/A"})`);
+          });
+
+          const pdfBytes = buildPdf(lines);
+          const invoiceHash = await sha256(pdfBytes);
+
+          const txRes = await fetch("/api/invoices/tx/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trackingId, invoiceHash })
+          });
+          const txPayload = await txRes.json();
+          if (!txRes.ok || !txPayload.success) {
+            alert(txPayload.message || "Unable to register invoice.");
+            return;
+          }
+
+          await sendTx(txPayload.txData);
+
+          const blob = new Blob([pdfBytes], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `invoice-${trackingId}.pdf`;
+          link.click();
+          URL.revokeObjectURL(url);
+          setStatus(invoiceStatus, "Pending");
+        });
+      }
+
+      if (verifyInvoiceBtn) {
+        verifyInvoiceBtn.addEventListener("click", async () => {
+          const trackingId = verifyTrackingId.value.trim();
+          if (!trackingId) {
+            alert("Tracking ID required.");
+            return;
+          }
+          if (!invoiceFile.files || !invoiceFile.files[0]) {
+            alert("Select an invoice PDF.");
+            return;
+          }
+          const form = new FormData();
+          form.append("trackingId", trackingId);
+          form.append("invoice", invoiceFile.files[0]);
+
+          const res = await fetch("/api/invoices/verify", {
+            method: "POST",
+            body: form
+          });
+          const payload = await res.json();
+          if (!res.ok || !payload.success) {
+            alert(payload.message || "Unable to verify invoice.");
+            return;
+          }
+          setStatus(verifyResult, payload.authentic ? "Approved" : "Rejected");
+        });
+      }
+
+      const attestInvoice = async (authentic) => {
+        const trackingId = verifyTrackingId.value.trim();
+        if (!trackingId) {
+          alert("Tracking ID required.");
+          return;
+        }
+        const onChain = await ensureGanacheChain();
+        if (!onChain) {
+          alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+          return;
+        }
+        const res = await fetch("/api/invoices/tx/attest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trackingId, authentic })
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload.success) {
+          alert(payload.message || "Unable to prepare attestation.");
+          return;
+        }
+        await sendTx(payload.txData);
+        setStatus(verifyResult, authentic ? "Approved" : "Rejected");
+      };
+
+      if (approveInvoiceBtn) {
+        approveInvoiceBtn.addEventListener("click", () => attestInvoice(true));
+      }
+
+      if (rejectInvoiceBtn) {
+        rejectInvoiceBtn.addEventListener("click", () => attestInvoice(false));
+      }
+    </script>
   </body>
 </html>

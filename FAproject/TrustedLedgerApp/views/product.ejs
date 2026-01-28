@@ -587,14 +587,14 @@
 
           <div class="rating">
             <div class="stars" aria-label="Rating">
-              <% for (let i = 1; i <= 5; i += 1) { %>
-                <svg viewBox="0 0 24 24" fill="<%= i <= Math.floor(product.rating) ? '#facc15' : '#d1d5db' %>" stroke="<%= i <= Math.floor(product.rating) ? '#facc15' : '#d1d5db' %>">
+            <% for (let i = 1; i <= 5; i += 1) { %>
+                <svg viewBox="0 0 24 24" fill="<%= i <= Math.floor(averageRating || 0) ? '#facc15' : '#d1d5db' %>" stroke="<%= i <= Math.floor(averageRating || 0) ? '#facc15' : '#d1d5db' %>">
                   <path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6.2L12 17.77 6.6 20.3l1.03-6.2L3.27 9.85l6.03-.88L12 3.5z" />
                 </svg>
-              <% } %>
-            </div>
-            <span class="rating-value"><%= product.rating.toFixed(1) %></span>
-            <span class="rating-count">(<%= product.reviewCount.toLocaleString() %> reviews)</span>
+            <% } %>
+          </div>
+          <span class="rating-value"><%= Number(averageRating || 0).toFixed(1) %></span>
+          <span class="rating-count">(<%= (reviewCount || 0).toLocaleString() %> reviews)</span>
           </div>
 
           <div class="seller-card">
@@ -715,7 +715,7 @@
         <div class="tab-content" data-tab-content="reviews" role="tabpanel">
           <div class="reviews-grid">
             <div class="rating-summary">
-              <div class="score"><%= product.rating.toFixed(1) %></div>
+              <div class="score"><%= Number(averageRating || 0).toFixed(1) %></div>
               <div class="stars" style="justify-content: center; margin-bottom: 8px;">
                 <% for (let i = 1; i <= 5; i += 1) { %>
                   <svg viewBox="0 0 24 24" fill="#facc15" stroke="#facc15">
@@ -723,7 +723,7 @@
                   </svg>
                 <% } %>
               </div>
-              <p style="color: var(--gray-600);">Based on <%= product.reviewCount.toLocaleString() %> reviews</p>
+              <p style="color: var(--gray-600);">Based on <%= (reviewCount || 0).toLocaleString() %> reviews</p>
             </div>
             <div class="rating-bars">
               <% [5,4,3,2,1].forEach((rating) => { %>
@@ -742,7 +742,22 @@
             <button class="btn primary" type="button">Write a Review</button>
           </div>
 
-          <% reviews.forEach((review) => { %>
+          <% if (!reviews || !reviews.length) { %>
+            <div class="review-card">
+              <div class="review-header">
+                <div class="reviewer">
+                  <div class="avatar">★</div>
+                  <div>
+                    <div style="font-weight: 600;">No reviews yet</div>
+                    <div class="review-meta">
+                      <span>Be the first to review this product.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% } %>
+          <% (reviews || []).forEach((review) => { %>
             <div class="review-card">
               <div class="review-header">
                 <div class="reviewer">
@@ -771,8 +786,14 @@
 
               <h4 style="margin: 0 0 8px; font-size: 16px;"><%= review.title %></h4>
               <p style="color: var(--gray-700); margin: 0 0 8px;">
-                <%= review.comment %>
+                <%= review.comment || "No comment provided." %>
               </p>
+
+              <% if (review.photoHash) { %>
+                <div style="margin-bottom: 8px; font-size: 12px; color: var(--gray-500);">
+                  Photo: <%= review.photoHash %>
+                </div>
+              <% } %>
 
               <div class="review-actions">
                 <span>Helpful (<%= review.helpfulVotes %>)</span>
@@ -883,29 +904,29 @@
 
       if (buyNowButton) {
         buyNowButton.addEventListener("click", async () => {
+          if (buyNowButton.dataset.processing === "true") {
+            return;
+          }
+          buyNowButton.dataset.processing = "true";
+          buyNowButton.disabled = true;
+          const originalLabel = buyNowButton.textContent;
+          buyNowButton.textContent = "Processing...";
+
           if (window.appWallet && !window.appWallet.isConnected()) {
             const result = await window.appWallet.connect();
             if (!result || !result.account) {
+              buyNowButton.dataset.processing = "false";
+              buyNowButton.disabled = false;
+              buyNowButton.textContent = originalLabel;
               return;
             }
-          }
-
-          const recipientName = prompt("Recipient name:");
-          if (!recipientName) {
-            return;
-          }
-          const recipientAddress = prompt("Recipient address:");
-          if (!recipientAddress) {
-            return;
           }
 
           const trackingId = `TRK-${Date.now()}`;
           const payload = {
             trackingId: trackingId,
-            senderName: "<%= product.seller.name %>",
-            senderAddress: "Seller warehouse",
-            recipientName: recipientName,
-            recipientAddress: recipientAddress,
+            recipientName: "<%= userEmail || 'Marketplace Customer' %>",
+            recipientAddress: "Address on file",
             itemDescription: "<%= product.productInfo.name %>",
             shipmentValue: "<%= product.productInfo.price %>"
           };
@@ -918,12 +939,32 @@
           const data = await res.json();
           if (!data || !data.txData) {
             alert(data && data.message ? data.message : "Unable to create shipment.");
+            buyNowButton.dataset.processing = "false";
+            buyNowButton.disabled = false;
+            buyNowButton.textContent = originalLabel;
             return;
           }
 
           const txHash = await sendTransaction(data.txData);
           if (!txHash) {
+            buyNowButton.dataset.processing = "false";
+            buyNowButton.disabled = false;
+            buyNowButton.textContent = originalLabel;
             return;
+          }
+
+          try {
+            const orderItems = [{
+              id: "<%= product.id %>",
+              name: "<%= product.productInfo.name %>"
+            }];
+            localStorage.setItem(`order:${trackingId}`, JSON.stringify({
+              items: orderItems,
+              buyerEmail: "<%= userEmail || '' %>",
+              recipientAddress: "Address on file"
+            }));
+          } catch (err) {
+            // ignore storage errors
           }
 
           localStorage.setItem("lastTrackingId", trackingId);

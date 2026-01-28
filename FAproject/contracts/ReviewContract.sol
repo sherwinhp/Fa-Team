@@ -7,21 +7,22 @@ pragma solidity ^0.8.19;
  */
 contract ReviewContract {
     struct Review {
-        uint256 productId;
+        bytes32 productId;
         address buyer;
         uint8 rating;
         string commentHash;
+        string photoHash;
         uint256 timestamp;
         bytes32 purchaseId;
         bytes32 deliveryTxHash;
     }
 
     Review[] private reviews;
-    mapping(uint256 => uint256[]) private productReviews;
+    mapping(bytes32 => uint256[]) private productReviews;
     mapping(bytes32 => bool) private reviewedPurchase; // purchaseId => bool
 
     event ReviewSubmitted(
-        uint256 indexed productId,
+        bytes32 indexed productId,
         address indexed buyer,
         uint8 rating,
         bytes32 indexed purchaseId,
@@ -29,16 +30,17 @@ contract ReviewContract {
     );
 
     function submitReview(
-        uint256 productId,
+        bytes32 productId,
         bytes32 purchaseId,
         uint8 rating,
         string calldata commentHash,
+        string calldata photoHash,
         bytes32 deliveryTxHash
     ) external {
-        require(productId > 0, "Invalid product");
+        require(productId != bytes32(0), "Invalid product");
         require(purchaseId != bytes32(0), "PurchaseId required");
         require(!reviewedPurchase[purchaseId], "Purchase already reviewed");
-        require(rating >= 1 && rating <= 5, "Rating 1-5");
+        require(rating <= 5, "Rating 0-5");
 
         reviews.push(
             Review({
@@ -46,6 +48,7 @@ contract ReviewContract {
                 buyer: msg.sender,
                 rating: rating,
                 commentHash: commentHash,
+                photoHash: photoHash,
                 timestamp: block.timestamp,
                 purchaseId: purchaseId,
                 deliveryTxHash: deliveryTxHash
@@ -58,7 +61,7 @@ contract ReviewContract {
         emit ReviewSubmitted(productId, msg.sender, rating, purchaseId, deliveryTxHash);
     }
 
-    function getReviews(uint256 productId) external view returns (Review[] memory) {
+    function getReviews(bytes32 productId) external view returns (Review[] memory) {
         uint256[] memory ids = productReviews[productId];
         Review[] memory result = new Review[](ids.length);
         for (uint256 i = 0; i < ids.length; i++) {
@@ -67,16 +70,25 @@ contract ReviewContract {
         return result;
     }
 
-    function getAverageRating(uint256 productId) external view returns (uint256 average, uint256 count) {
+    function getAverageRating(bytes32 productId) external view returns (uint256 average, uint256 count) {
         uint256[] memory ids = productReviews[productId];
         if (ids.length == 0) {
             return (0, 0);
         }
         uint256 total;
+        uint256 ratedCount;
         for (uint256 i = 0; i < ids.length; i++) {
-            total += reviews[ids[i]].rating;
+            uint8 ratingValue = reviews[ids[i]].rating;
+            if (ratingValue == 0) {
+                continue;
+            }
+            total += ratingValue;
+            ratedCount += 1;
         }
-        return ((total * 100) / (ids.length * 5), ids.length);
+        if (ratedCount == 0) {
+            return (0, 0);
+        }
+        return ((total * 100) / (ratedCount * 5), ratedCount);
     }
 
     function hasReviewed(bytes32 purchaseId) external view returns (bool) {

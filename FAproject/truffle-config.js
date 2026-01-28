@@ -70,15 +70,16 @@ contracts_build_directory: './TrustedLedgerApp/public/build',
      network_id: "*",       // Any network (default: none)
     },
     //
-    // An additional network, but with some advanced options…
-    // advanced: {
-    //   port: 8777,             // Custom port
-    //   network_id: 1342,       // Custom network
-    //   gas: 8500000,           // Gas sent with each transaction (default: ~6700000)
-    //   gasPrice: 20000000000,  // 20 gwei (in wei) (default: 100 gwei)
-    //   from: <address>,        // Account to send transactions from (default: accounts[0])
-    //   websocket: true         // Enable EventEmitter interface for web3 (default: false)
-    // },
+    // An additional network, but with some advanced options...
+    advanced: {
+      host: "127.0.0.1",
+      port: 8777,             // Custom port
+      network_id: 1342,       // Custom network
+      gas: 6700000,           // Gas sent with each transaction (default: ~6700000)
+      gasPrice: 0,            // 0 for Ganache if you want near-zero fees
+      from: "0x46EB73Cb66991C07622b3aB77a6E9A93139EE661",
+      websocket: true         // Enable EventEmitter interface for web3 (default: false)
+    },
     //
     // Useful for deploying to a public network.
     // Note: It's important to wrap the provider as a function to ensure truffle uses a new provider every time.

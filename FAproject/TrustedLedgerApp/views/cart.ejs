@@ -136,6 +136,10 @@
           <form method="post" action="/cart/clear" style="margin-top: 16px;">
             <button class="btn btn-outline" type="submit">Clear Cart</button>
           </form>
+          <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <div style="font-weight: 700;">Total: $<%= totalEth %> ETHR</div>
+            <a class="btn btn-primary" href="/checkout">Proceed to Checkout</a>
+          </div>
         <% } %>
       </section>
     </main>
