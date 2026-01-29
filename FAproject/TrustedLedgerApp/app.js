@@ -49,9 +49,9 @@ const AUTO_STATUS_INTERVAL_MS = Number(process.env.AUTO_STATUS_INTERVAL_MS) || 5
 const AUTO_STATUS_ACCOUNT = process.env.AUTO_STATUS_ACCOUNT || "";
 
 app.use((req, res, next) => {
-  res.locals.isLoggedIn = Boolean(req.session && req.session.user);
-  res.locals.userRole = req.session && req.session.user ? req.session.user.role : null;
-  res.locals.userEmail = req.session && req.session.user ? req.session.user.email : null;
+  res.locals.isLoggedIn = Boolean(req.session && req.session.web3Account && req.session.web3Active);
+  res.locals.userRole = req.session && req.session.web3Role ? req.session.web3Role : null;
+  res.locals.userEmail = null;
   res.locals.ganacheAccounts = ganacheAccounts;
   res.locals.ganacheChainIds = ganacheChainIds;
   res.locals.ganacheProviderUrl = ganacheProviderUrl;
@@ -140,6 +140,15 @@ try {
 }
 
 let products = [];
+const userManagementArtifactPath = path.join(__dirname, 'public', 'build', 'UserManagementContract.json');
+let userManagementAbi = null;
+let userManagementJson = null;
+try {
+  userManagementJson = JSON.parse(fs.readFileSync(userManagementArtifactPath, 'utf8'));
+  userManagementAbi = userManagementJson.abi;
+} catch (error) {
+  console.warn("User management ABI not available:", error.message || error);
+}
 
 function ensureSessionCart(req) {
   if (!req.session) {
@@ -462,6 +471,31 @@ async function getProductsForView() {
   return products;
 }
 
+async function getUserManagementContract() {
+  if (!userManagementAbi || !userManagementJson || !web3Instance) {
+    return null;
+  }
+
+  const networkId = await web3Instance.eth.net.getId();
+  const networkData = userManagementJson.networks
+    ? userManagementJson.networks[networkId]
+    : null;
+
+  if (!networkData || !networkData.address) {
+    return null;
+  }
+
+  return new web3Instance.eth.Contract(userManagementAbi, networkData.address);
+}
+
+async function getProductById(productId) {
+  if (!productId) {
+    return null;
+  }
+  const liveProducts = await getProductsForView();
+  return liveProducts.find((item) => item.id === productId) || null;
+}
+
 function parseList(input) {
   if (!input) return [];
   return input
@@ -671,27 +705,55 @@ async function autoAdvanceShipments() {
 }
 
 function requireLogin(req, res, next) {
-  if (req.session && req.session.user) {
+  if (req.session && req.session.web3Account && req.session.web3Active) {
     return next();
   }
 
-  const nextUrl = encodeURIComponent(req.originalUrl || "/");
-  return res.redirect(`/login?next=${nextUrl}`);
+  if (String(req.originalUrl || "").startsWith("/api/")) {
+    return res.status(401).json({
+      success: false,
+      message: "Connect MetaMask to continue."
+    });
+  }
+  return res.redirect("/");
+}
+
+function requireWallet(req, res, next) {
+  if (req.session && req.session.web3Account) {
+    return next();
+  }
+  return res.status(401).json({
+    success: false,
+    message: "Connect MetaMask to continue."
+  });
 }
 
 function requireAdmin(req, res, next) {
-  if (req.session && req.session.user && req.session.user.role === "admin") {
+  const role = req.session ? req.session.web3Role : null;
+  if (req.session && req.session.web3Account && req.session.web3Active && (role === "admin" || role === "super_admin")) {
     return next();
   }
-
-  return res.redirect("/admin-login");
+  if (String(req.originalUrl || "").startsWith("/api/")) {
+    return res.status(403).json({
+      success: false,
+      message: "Admin access required."
+    });
+  }
+  return res.redirect("/");
 }
 
 function requireUser(req, res, next) {
-  if (req.session && req.session.user && req.session.user.role !== "admin") {
+  const role = req.session ? req.session.web3Role : null;
+  if (req.session && req.session.web3Account && req.session.web3Active && role === "user") {
     return next();
   }
-  return res.redirect("/admin");
+  if (String(req.originalUrl || "").startsWith("/api/")) {
+    return res.status(403).json({
+      success: false,
+      message: "User access required."
+    });
+  }
+  return res.redirect("/");
 }
 
 function resolveWalletContract() {
@@ -792,6 +854,17 @@ const toDeepJsonSafe = (value) => {
 };
 
 const MAX_PRODUCT_PRICE_ETH = 15;
+const USER_ROLE_LABELS = {
+  0: "none",
+  1: "user",
+  2: "admin",
+  3: "super_admin"
+};
+
+const resolveUserRoleLabel = (roleValue) => {
+  const index = Number(roleValue);
+  return USER_ROLE_LABELS[index] || "none";
+};
 
 async function getPreferredGasPrice() {
   if (!web3Instance) {
@@ -1100,62 +1173,37 @@ app.get('/about', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.render('login', { acct: account, next: req.query.next || "" });
+  return res.redirect('/');
 });
 
 app.get('/admin-login', (req, res) => {
-  res.render('admin-login', { acct: account });
+  return res.redirect('/');
 });
 
 app.post('/login', (req, res) => {
-  const { email, password, role, next: nextPath } = req.body;
-
-  if (!email || !password) {
-    return res.redirect('/login');
-  }
-
-  if (role === "admin") {
-    const isAdmin = email === "main@gmail.com" && password === "123456";
-    if (!isAdmin) {
-      return res.redirect('/login');
-    }
-  }
-
-  req.session.user = {
-    email,
-    role: role === "admin" ? "admin" : "user"
-  };
-
-  const redirectTo = typeof nextPath === "string" && nextPath ? nextPath : "/wallet";
-  return res.redirect(redirectTo);
+  return res.redirect('/');
 });
 
 app.post('/logout', (req, res) => {
+  if (req.session) {
+    req.session.web3Account = null;
+    req.session.web3Role = null;
+    req.session.web3Active = null;
+  }
   req.session.destroy(() => {
     res.redirect('/');
   });
 });
 
 app.get('/register', (req, res) => {
-  res.render('register', { acct: account });
+  return res.redirect('/');
 });
 
 app.post('/register', (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.redirect('/register');
-  }
-
-  req.session.user = {
-    email,
-    role: "user"
-  };
-
-  return res.redirect('/wallet');
+  return res.redirect('/');
 });
 
-app.get('/wallet', requireLogin, requireUser, async (req, res) => {
+app.get('/wallet', requireLogin, async (req, res) => {
   try {
     const wallet = await buildWalletSnapshot(account);
     return res.render('wallet', { acct: account, wallet });
@@ -1190,6 +1238,249 @@ app.get('/api/wallet', requireLogin, async (req, res) => {
 app.get('/admin', requireAdmin, async (req, res) => {
   const liveProducts = await getProductsForView();
   res.render('admin-dashboard', { acct: account, products: liveProducts });
+});
+
+app.get('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const contract = await getUserManagementContract();
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'User management contract not available'
+      });
+    }
+    const [events, superAdmin] = await Promise.all([
+      contract.getPastEvents("UserRegistered", { fromBlock: 0, toBlock: "latest" }).catch(() => []),
+      contract.methods.superAdmin().call().catch(() => "")
+    ]);
+    const addresses = Array.from(new Set(events.map((evt) => evt.returnValues.user)));
+    const profiles = await Promise.all(
+      addresses.map(async (address) => {
+        try {
+          const profile = await contract.methods.getUser(address).call();
+          return {
+            address,
+            role: resolveUserRoleLabel(profile.role),
+            active: Boolean(profile.active),
+            createdAt: Number(profile.createdAt || 0),
+            lastUpdated: Number(profile.lastUpdated || 0)
+          };
+        } catch (err) {
+          return null;
+        }
+      })
+    );
+
+    const users = profiles
+      .filter(Boolean)
+      .map((profile) => ({
+        ...profile,
+        isSuperAdmin: superAdmin && profile.address.toLowerCase() === String(superAdmin).toLowerCase()
+      }));
+
+    return res.json({ success: true, users });
+  } catch (error) {
+    console.error('Error loading users:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to load users'
+    });
+  }
+});
+
+app.post('/api/users/tx/register', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { userAddress, account: from } = req.body || {};
+    const contract = await getUserManagementContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'User management contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    if (!userAddress || !userAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid user address'
+      });
+    }
+
+    const tx = contract.methods.registerUser(userAddress);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing user register tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
+app.post('/api/users/tx/register-self', requireWallet, express.json(), async (req, res) => {
+  try {
+    const { account: from } = req.body || {};
+    const contract = await getUserManagementContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'User management contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid account'
+      });
+    }
+
+    const sessionAccount = req.session?.web3Account || "";
+    if (!sessionAccount || sessionAccount.toLowerCase() !== from.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account mismatch. Reconnect MetaMask.'
+      });
+    }
+
+    const profile = await contract.methods.getUser(from).call().catch(() => null);
+    if (profile && Number(profile.role || 0) !== 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account already registered'
+      });
+    }
+
+    const tx = contract.methods.registerUser(from);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing self-register tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
+app.post('/api/users/tx/status', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { userAddress, active, account: from } = req.body || {};
+    const contract = await getUserManagementContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'User management contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    if (!userAddress || !userAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid user address'
+      });
+    }
+
+    const desired = String(active).toLowerCase() === "true";
+    const tx = contract.methods.setStatus(userAddress, desired);
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing user status tx:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
+app.get('/admin/products/:id/edit', requireAdmin, async (req, res) => {
+  const productId = String(req.params.id || "");
+  const product = await getProductById(productId);
+  if (!product) {
+    return res.redirect('/admin');
+  }
+
+  const featureLines = Array.isArray(product.features) ? product.features.join("\n") : "";
+  const specLines = Array.isArray(product.specifications)
+    ? product.specifications.map((spec) => `${spec.label}: ${spec.value}`).join("\n")
+    : "";
+  const imageUrls = Array.isArray(product.images) ? product.images.join("\n") : "";
+
+  return res.render('addProduct', {
+    acct: account,
+    products: products,
+    status: loading,
+    addObject: null,
+    addFunction: null,
+    addStatus: false,
+    error: null,
+    formData: {
+      name: product.productInfo?.name || "",
+      description: product.productInfo?.description || "",
+      price: product.productInfo?.price || "",
+      category: product.productInfo?.category || "",
+      stock: product.stock || 0,
+      fullDescription: product.fullDescription || "",
+      features: featureLines,
+      specifications: specLines,
+      imageUrls,
+      sellerName: product.seller?.name || product.sellerName || ""
+    },
+    editMode: true,
+    productId
+  });
 });
 
 app.get('/api/orders', requireAdmin, async (req, res) => {
@@ -1652,11 +1943,11 @@ app.get('/api/reviews/:productId', async (req, res) => {
   }
 });
 
-app.get('/documents', requireLogin, requireUser, (req, res) => {
+app.get('/documents', requireLogin, (req, res) => {
   res.render('documents', { acct: account });
 });
 
-app.get('/documents/verified', requireLogin, requireUser, (req, res) => {
+app.get('/documents/verified', requireLogin, (req, res) => {
   const status = String(req.query.status || "").toLowerCase();
   const trackingId = String(req.query.trackingId || "");
   const isSuccess = status === "approved";
@@ -1667,7 +1958,7 @@ app.get('/documents/verified', requireLogin, requireUser, (req, res) => {
   });
 });
 
-app.get('/orders', requireLogin, requireUser, (req, res) => {
+app.get('/orders', requireLogin, (req, res) => {
   res.render('orders', { acct: account });
 });
 
@@ -1755,7 +2046,9 @@ app.get('/addproduct', requireAdmin, (req, res) => {
     addFunction: null,
     addStatus: false,
     error: null,
-    formData: {}
+    formData: {},
+    editMode: false,
+    productId: ""
   });
 });
 
@@ -1768,7 +2061,9 @@ app.post('/addproduct', requireAdmin, (req, res) => {
     addFunction: null,
     addStatus: false,
     error: 'Use the on-chain add flow with MetaMask to create products.',
-    formData: req.body
+    formData: req.body,
+    editMode: false,
+    productId: ""
   });
 });
 
@@ -1915,6 +2210,120 @@ app.post('/api/products/tx/create', requireAdmin, express.json(), async (req, re
   }
 });
 
+app.post('/api/products/tx/update', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const {
+      productId,
+      name,
+      description,
+      price,
+      imageUrl,
+      category,
+      account: from,
+      sellerName,
+      stock,
+      fullDescription,
+      features,
+      specifications
+    } = req.body;
+
+    const contract = await getProductContract();
+
+    if (!contract || !web3Instance) {
+      return res.status(500).json({
+        success: false,
+        message: 'Product contract not available'
+      });
+    }
+
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid admin account'
+      });
+    }
+
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID is required'
+      });
+    }
+
+    if (!name || !description || !price) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, description, and price are required'
+      });
+    }
+
+    const featureList = parseList(features);
+    const specList = parseSpecs(specifications);
+    const specLabels = specList.map((spec) => spec.label);
+    const specValues = specList.map((spec) => spec.value);
+    const stockValue = Number(stock || 0);
+    const statusValue = Number.isFinite(stockValue)
+      ? (stockValue === 0 ? 2 : stockValue <= 5 ? 1 : 0)
+      : 0;
+
+    const priceValue = Number(price);
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be a valid number greater than 0'
+      });
+    }
+
+    if (priceValue > MAX_PRODUCT_PRICE_ETH) {
+      return res.status(400).json({
+        success: false,
+        message: `Price must be ${MAX_PRODUCT_PRICE_ETH} ETH or less`
+      });
+    }
+
+    const priceWei = web3Instance.utils.toWei(String(price), 'ether');
+    const cleanImage = imageUrl || '/images/default-product.jpeg';
+    const cleanCategory = category || 'Verified';
+    const resolvedSellerName = sellerName || "TrustedLedger Store";
+
+    const tx = contract.methods.updateProduct(
+      productId,
+      name,
+      description,
+      cleanImage,
+      cleanCategory,
+      priceWei,
+      resolvedSellerName,
+      Number.isFinite(stockValue) ? stockValue : 0,
+      statusValue,
+      fullDescription || description,
+      featureList.length ? featureList : ["Blockchain verified authenticity", "Secure escrow-ready checkout"],
+      specLabels.length ? specLabels : ["Condition", "Warranty"],
+      specValues.length ? specValues : ["New", "1 Year"]
+    );
+    const gasEstimate = await tx.estimateGas({ from });
+    const gasPrice = await getPreferredGasPrice();
+
+    return res.json({
+      success: true,
+      productId,
+      txData: {
+        from,
+        to: contract.options.address,
+        data: tx.encodeABI(),
+        gas: toHexQuantity(gasEstimate),
+        ...(gasPrice && !isZeroQuantity(gasPrice) ? { gasPrice: toHexQuantity(gasPrice) } : {})
+      }
+    });
+  } catch (error) {
+    console.error('Error preparing product update:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to prepare transaction'
+    });
+  }
+});
+
 app.post('/api/products/tx/delete', requireAdmin, express.json(), async (req, res) => {
   try {
     const { productId, account: from } = req.body;
@@ -1986,7 +2395,7 @@ app.get('/checkout', requireLogin, requireUser, (req, res) => {
     acct: account,
     cartItems: [],
     totalEth: "0.0000",
-    userEmail: req.session && req.session.user ? req.session.user.email : null
+    userEmail: req.session && req.session.web3Account ? req.session.web3Account : null
   });
 });
 
@@ -2069,13 +2478,40 @@ app.post('/web3Connect', express.json(), async (req, res) => {
       shipmentCount = 0;
     }
     
+    let roleLabel = "none";
+    let isActive = false;
+    try {
+      const userContract = await getUserManagementContract();
+      if (userContract) {
+        const profile = await userContract.methods.getUser(acct).call();
+        roleLabel = resolveUserRoleLabel(profile.role);
+        isActive = Boolean(profile.active) && roleLabel !== "none";
+      }
+    } catch (roleError) {
+      roleLabel = "none";
+      isActive = false;
+    }
+
+    const sellerAddressLower = String(sellerAddress || "").toLowerCase();
+    if (sellerAddressLower && acct.toLowerCase() === sellerAddressLower) {
+      roleLabel = roleLabel === "none" ? "admin" : roleLabel;
+      isActive = true;
+    }
+
+    if (req.session) {
+      req.session.web3Role = roleLabel;
+      req.session.web3Active = isActive;
+    }
+
     loading = false;
-    
+
     res.json({
       success: true,
       message: 'Connected to blockchain with MetaMask',
       shipmentCount: shipmentCount,
-      connectedAccount: account
+      connectedAccount: account,
+      role: roleLabel,
+      active: isActive
     });
   } catch (error) {
       console.error('Error in web3Connect:', error);

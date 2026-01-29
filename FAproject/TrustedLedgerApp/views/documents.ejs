@@ -214,7 +214,7 @@
             Verification uses server-side hash comparison and does <strong>not</strong> cost gas.
             Registration and attestation still require admin approval and MetaMask.
           </p>
-          <% if (userRole === 'admin') { %>
+          <% if (userRole === 'admin' || userRole === 'super_admin') { %>
             <div class="field" style="display:flex;gap:10px;flex-direction:row;">
               <button class="btn" id="approveInvoiceBtn" type="button">Approve</button>
               <button class="btn-outline" id="rejectInvoiceBtn" type="button">Reject</button>

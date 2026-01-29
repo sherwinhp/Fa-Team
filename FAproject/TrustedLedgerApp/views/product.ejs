@@ -495,7 +495,7 @@
       </div>
 
       <% const images = product.images && product.images.length ? product.images : ['/images/default-product.jpeg']; %>
-      <% const loginHref = '/login?next=' + encodeURIComponent(returnTo || '/'); %>
+      <% const loginHref = encodeURIComponent(returnTo || '/'); %>
 
       <section class="product-grid">
         <div class="gallery">
@@ -567,13 +567,18 @@
           </div>
 
           <div class="actions">
-            <% if (isLoggedIn) { %>
+            <% if (isLoggedIn && (userRole === 'admin' || userRole === 'super_admin')) { %>
+              <div class="login-required">
+                <span>Admins cannot purchase products. Manage listings from the Admin Dashboard.</span>
+                <a class="btn" href="/admin/products/<%= product.id %>/edit">Edit Product</a>
+              </div>
+            <% } else if (isLoggedIn) { %>
               <button class="btn" id="addToCartButton" type="button" data-product-id="<%= product.id %>">Add to Cart</button>
               <button class="btn primary" id="buyNowButton" type="button">Buy Now</button>
             <% } else { %>
               <div class="login-required">
-                <span>Log in to purchase, pay, or track orders.</span>
-                <a class="btn primary" href="<%= loginHref %>">Log In to Buy</a>
+                <span>Connect MetaMask to purchase, pay, or track orders.</span>
+                <button class="btn primary" id="connectToBuy" type="button">Connect MetaMask</button>
               </div>
             <% } %>
           </div>
@@ -727,7 +732,7 @@
                   <div style="font-weight:600;">Admin Reply</div>
                   <div style="color: var(--gray-700); margin-top: 6px;"><%= review.adminReply %></div>
                 </div>
-              <% } else if (userRole === 'admin') { %>
+              <% } else if (userRole === 'admin' || userRole === 'super_admin') { %>
                 <div style="margin-top: 12px;">
                   <label style="font-size: 12px; color: var(--gray-500);">Admin Reply</label>
                   <textarea class="admin-reply-input" data-review-id="<%= review.reviewId %>" rows="2" style="width:100%;border-radius:10px;border:1px solid var(--gray-200);padding:8px;margin-top:6px;"></textarea>
@@ -755,6 +760,7 @@
 
       const addToCartButton = document.getElementById("addToCartButton");
       const buyNowButton = document.getElementById("buyNowButton");
+      const connectToBuyButton = document.getElementById("connectToBuy");
 
       const sendTransaction = async (txData) => {
         if (!window.ethereum) {
@@ -774,7 +780,7 @@
 
       const ensureBackendWeb3 = async (account) => {
         if (!account) {
-          return false;
+          return null;
         }
         let contractAddress = "";
         if (window.ethereum) {
@@ -805,9 +811,13 @@
               providerUrl: "<%= ganacheProviderUrl || '' %>" || undefined
             })
           });
-          return response.ok;
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            return null;
+          }
+          return payload;
         } catch (err) {
-          return false;
+          return null;
         }
       };
 
@@ -921,6 +931,49 @@
           }
 
           window.location.href = `/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+        });
+      }
+
+      if (connectToBuyButton) {
+        connectToBuyButton.addEventListener("click", async () => {
+          if (!window.appWallet) {
+            alert("MetaMask not detected.");
+            return;
+          }
+          let account = "";
+          if (window.appWallet.isConnected()) {
+            account = window.appWallet.getAccount();
+          } else {
+            const result = await window.appWallet.connect();
+            account = result && result.account ? result.account : "";
+          }
+          if (!account) {
+            return;
+          }
+          const backend = await ensureBackendWeb3(account);
+          if (!backend || !backend.active) {
+            try {
+              const response = await fetch("/api/users/tx/register-self", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account })
+              });
+              const payload = await response.json();
+              if (!response.ok || !payload.success) {
+                alert(payload.message || "Unable to register wallet.");
+                return;
+              }
+              const txHash = await sendTransaction(payload.txData);
+              if (!txHash) {
+                return;
+              }
+              await ensureBackendWeb3(account);
+            } catch (err) {
+              alert(err.message || "Unable to register wallet.");
+              return;
+            }
+          }
+          window.location.href = decodeURIComponent("<%= loginHref %>");
         });
       }
 

@@ -346,6 +346,7 @@
                   <p>$<%= product.productInfo.price %> ETHR &nbsp;&nbsp; Stock <%= product.stock %> &nbsp;&nbsp; ID: <%= product.id %></p>
                 </div>
                 <div class="action-buttons">
+                  <a class="icon-btn" href="/admin/products/<%= product.id %>/edit" title="Edit product">✎</a>
                   <button class="icon-btn delete-product" type="button" data-product-id="<%= product.id %>">Del</button>
                 </div>
               </div>
@@ -380,58 +381,24 @@
           <h3>User Management</h3>
           <span class="pill" style="background:#fff7ed;color:#c2410c;">Limited Access - Super Admin Required for Promotion</span>
         </div>
-        <input class="search" placeholder="Search users by name, email, or role..." />
-        <div class="list">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <input class="search" id="newUserAddress" placeholder="New user wallet address (0x...)" />
+          <button class="btn-outline" id="registerUserButton" type="button">Add User</button>
+        </div>
+        <div class="list" id="userList">
           <div class="row">
             <div>
-              <h4>John Doe <span class="pill">User</span></h4>
-              <p>user@example.com</p>
-              <p>Wallet: Not connected &nbsp;&nbsp; Joined: 15/01/2024</p>
-            </div>
-            <div class="user-actions">
-              <button class="btn-outline" type="button">Promote to Admin</button>
-              <button class="btn-outline" type="button" style="color:#dc2626;border-color:#fecaca;">Deactivate</button>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <h4>Admin User <span class="pill" style="background:#fff7ed;color:#c2410c;">Admin</span></h4>
-              <p>admin@blockchaintrack.com</p>
-              <p>Wallet: Not connected &nbsp;&nbsp; Joined: 20/11/2023</p>
-            </div>
-            <div class="user-actions">
-              <button class="btn-outline" type="button">Demote to User</button>
-              <button class="btn-outline" type="button" style="color:#dc2626;border-color:#fecaca;">Deactivate</button>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <h4>Super Administrator <span class="pill" style="background:#fef9c3;color:#ca8a04;">Super Admin</span></h4>
-              <p>superadmin@blockchaintrack.com</p>
-              <p>Wallet: Not connected &nbsp;&nbsp; Joined: 01/01/2023</p>
-            </div>
-            <div class="user-actions">
-              <button class="btn-outline" type="button" style="color:#a16207;border-color:#fde68a;">Cannot Modify</button>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <h4>Sarah Chen <span class="pill">User</span></h4>
-              <p>sarah@example.com</p>
-              <p>Wallet: Not connected &nbsp;&nbsp; Joined: 10/03/2024</p>
-            </div>
-            <div class="user-actions">
-              <button class="btn-outline" type="button">Promote to Admin</button>
-              <button class="btn-outline" type="button" style="color:#dc2626;border-color:#fecaca;">Deactivate</button>
+              <h4>Loading users...</h4>
+              <p>Connect MetaMask with an admin account to manage users.</p>
             </div>
           </div>
         </div>
         <div class="info-box">
           <strong>User Management Rules:</strong><br />
-          - Super Admin can promote users to admin and demote admins<br />
-          - Regular Admin can view users but cannot change roles<br />
-          - Super Admin account cannot be demoted or deactivated<br />
-          - Deactivated users cannot login to the system
+          - Users are stored on-chain via the UserManagement contract<br />
+          - Admins can add users and deactivate accounts<br />
+          - Super Admin account cannot be deactivated<br />
+          - Deactivated users cannot access protected pages
         </div>
       </section>
     </main>
@@ -456,6 +423,9 @@
 
       const deleteButtons = Array.from(document.querySelectorAll(".delete-product"));
       const orderList = document.getElementById("orderList");
+      const userList = document.getElementById("userList");
+      const registerUserButton = document.getElementById("registerUserButton");
+      const newUserAddressInput = document.getElementById("newUserAddress");
       const allowedChains = ["0x539", "0x1691"];
       let contractAdmin = "";
 
@@ -546,6 +516,64 @@
         }).join("");
       };
 
+      const formatUserDate = (timestamp) => {
+        const seconds = Number(timestamp || 0);
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+          return "Unknown";
+        }
+        return new Date(seconds * 1000).toLocaleString();
+      };
+
+      const renderUsers = (users) => {
+        if (!userList) {
+          return;
+        }
+        if (!users || !users.length) {
+          userList.innerHTML = `
+            <div class="row">
+              <div>
+                <h4>No users registered yet.</h4>
+                <p>Add a user wallet to register on-chain.</p>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        userList.innerHTML = users.map((user) => {
+          const roleLabel = user.role === "super_admin"
+            ? "Super Admin"
+            : user.role === "admin"
+              ? "Admin"
+              : "User";
+          const roleStyle = user.role === "super_admin"
+            ? "background:#fef9c3;color:#ca8a04;"
+            : user.role === "admin"
+              ? "background:#fff7ed;color:#c2410c;"
+              : "";
+          const statusText = user.active ? "Active" : "Inactive";
+          const statusStyle = user.active
+            ? "background:#ecfdf3;color:#16a34a;"
+            : "background:#fee2e2;color:#dc2626;";
+          const disableDelete = user.isSuperAdmin;
+          const actionLabel = user.active ? "Deactivate" : "Reactivate";
+          return `
+            <div class="row">
+              <div>
+                <h4>${user.address} <span class="pill" style="${roleStyle}">${roleLabel}</span></h4>
+                <p>Status: <span class="pill" style="${statusStyle}">${statusText}</span></p>
+                <p>Joined: ${formatUserDate(user.createdAt)} &nbsp;&nbsp; Updated: ${formatUserDate(user.lastUpdated)}</p>
+              </div>
+              <div class="user-actions">
+                <button class="btn-outline user-status-toggle" type="button" data-user-address="${user.address}" data-user-active="${user.active}">
+                  ${disableDelete ? "Cannot Modify" : actionLabel}
+                </button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      };
+
       const loadOrders = async () => {
         if (!orderList) {
           return;
@@ -570,6 +598,37 @@
             <div class="row">
               <div>
                 <h4>Unable to load orders.</h4>
+                <p>${err.message || "Try again later."}</p>
+              </div>
+            </div>
+          `;
+        }
+      };
+
+      const loadUsers = async () => {
+        if (!userList) {
+          return;
+        }
+        try {
+          const response = await fetch("/api/users");
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            userList.innerHTML = `
+              <div class="row">
+                <div>
+                  <h4>Unable to load users.</h4>
+                  <p>${payload.message || "Connect MetaMask and retry."}</p>
+                </div>
+              </div>
+            `;
+            return;
+          }
+          renderUsers(payload.users);
+        } catch (err) {
+          userList.innerHTML = `
+            <div class="row">
+              <div>
+                <h4>Unable to load users.</h4>
                 <p>${err.message || "Try again later."}</p>
               </div>
             </div>
@@ -671,7 +730,101 @@
         });
       }
 
+      if (registerUserButton && newUserAddressInput) {
+        registerUserButton.addEventListener("click", async () => {
+          const userAddress = String(newUserAddressInput.value || "").trim();
+          if (!userAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+            alert("Enter a valid wallet address.");
+            return;
+          }
+          const account = await getConnectedAccount();
+          if (!account) {
+            alert("Connect MetaMask to add users.");
+            return;
+          }
+          const onChain = await ensureGanacheChain();
+          if (!onChain) {
+            alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+            return;
+          }
+          try {
+            const response = await fetch("/api/users/tx/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userAddress, account })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              alert(payload.message || "Unable to prepare registration.");
+              return;
+            }
+            await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [payload.txData]
+            });
+            newUserAddressInput.value = "";
+            await loadUsers();
+          } catch (err) {
+            alert(err.message || "Unable to add user.");
+          }
+        });
+      }
+
+      if (userList) {
+        userList.addEventListener("click", async (event) => {
+          const target = event.target;
+          if (!target || !(target instanceof HTMLElement)) {
+            return;
+          }
+          if (!target.classList.contains("user-status-toggle")) {
+            return;
+          }
+          const userAddress = target.getAttribute("data-user-address");
+          const activeValue = target.getAttribute("data-user-active");
+          if (!userAddress) {
+            return;
+          }
+          if (target.textContent.includes("Cannot Modify")) {
+            return;
+          }
+          const account = await getConnectedAccount();
+          if (!account) {
+            alert("Connect MetaMask to manage users.");
+            return;
+          }
+          const onChain = await ensureGanacheChain();
+          if (!onChain) {
+            alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+            return;
+          }
+          const nextActive = String(activeValue) !== "true";
+          if (!confirm(`${nextActive ? "Reactivate" : "Deactivate"} this account?`)) {
+            return;
+          }
+          try {
+            const response = await fetch("/api/users/tx/status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userAddress, active: nextActive, account })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+              alert(payload.message || "Unable to prepare status update.");
+              return;
+            }
+            await window.ethereum.request({
+              method: "eth_sendTransaction",
+              params: [payload.txData]
+            });
+            await loadUsers();
+          } catch (err) {
+            alert(err.message || "Unable to update user.");
+          }
+        });
+      }
+
       loadOrders();
+      loadUsers();
 </script>
   </body>
 </html>

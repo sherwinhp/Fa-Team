@@ -379,7 +379,7 @@
           </ol>
         </div>
 
-        <% if (userRole === 'admin') { %>
+        <% if (userRole === 'admin' || userRole === 'super_admin') { %>
           <div class="sectionTitle">Admin Actions</div>
           <div class="checkList">
             <button class="pill" id="markDeliveredButton" type="button">Mark Delivered</button>

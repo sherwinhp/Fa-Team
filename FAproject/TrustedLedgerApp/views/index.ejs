@@ -232,7 +232,7 @@
       <div class="hero-actions">
         <input class="search" placeholder="Search products..." />
         <a href="/products" class="primary-btn">View All Products</a>
-        <% if (userRole === 'admin') { %>
+        <% if (userRole === 'admin' || userRole === 'super_admin') { %>
           <a href="/addproduct" class="primary-btn">Add Product</a>
         <% } %>
       </div>

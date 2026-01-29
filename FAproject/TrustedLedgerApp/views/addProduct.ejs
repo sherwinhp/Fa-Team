@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Add Product | Blockchain Marketplace</title>
+  <title><%= editMode ? 'Edit Product' : 'Add Product' %> | Blockchain Marketplace</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
@@ -139,8 +139,8 @@
 
   <div class="page">
     <section class="header">
-      <h1>Add a Verified Product</h1>
-      <p>Create a new listing and anchor it to the blockchain marketplace.</p>
+      <h1><%= editMode ? 'Edit Product' : 'Add a Verified Product' %></h1>
+      <p><%= editMode ? 'Update on-chain product details without recreating the listing.' : 'Create a new listing and anchor it to the blockchain marketplace.' %></p>
     </section>
 
     <div class="card">
@@ -149,7 +149,7 @@
       <% } %>
       <div class="error" id="onchainError" style="display: none;"></div>
 
-      <form id="addProductForm" action="/addproduct" method="POST">
+      <form id="addProductForm" action="/addproduct" method="POST" data-mode="<%= editMode ? 'edit' : 'create' %>" data-product-id="<%= productId || '' %>">
         <div class="form-grid">
           <div>
             <label for="name">Product Name *</label>
@@ -196,7 +196,7 @@
         </div>
 
         <div style="margin-top: 20px;">
-          <button class="btn" type="submit">Add Product</button>
+          <button class="btn" type="submit"><%= editMode ? 'Save Changes' : 'Add Product' %></button>
         </div>
       </form>
     </div>
@@ -206,6 +206,8 @@
     (() => {
       const form = document.getElementById("addProductForm");
       const errorBox = document.getElementById("onchainError");
+      const mode = form ? form.dataset.mode || "create" : "create";
+      const productId = form ? form.dataset.productId || "" : "";
 
       const showError = (message) => {
         if (!errorBox) {
@@ -272,10 +274,17 @@
               return;
             }
 
-            const response = await fetch("/api/products/tx/create", {
+            if (mode === "edit" && !productId) {
+              showError("Missing product id for edit.");
+              return;
+            }
+
+            const endpoint = mode === "edit" ? "/api/products/tx/update" : "/api/products/tx/create";
+            const payload = {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                productId,
                 name,
                 description,
                 price,
@@ -288,11 +297,13 @@
                 specifications,
                 account
               })
-            });
+            };
 
-            const payload = await response.json();
-            if (!response.ok || !payload.success) {
-              showError(payload.message || "Unable to prepare on-chain transaction.");
+            const response = await fetch(endpoint, payload);
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+              showError(result.message || "Unable to prepare on-chain transaction.");
               return;
             }
 
@@ -303,7 +314,7 @@
 
             await window.ethereum.request({
               method: "eth_sendTransaction",
-              params: [payload.txData]
+              params: [result.txData]
             });
 
             window.location.href = "/admin";

@@ -93,6 +93,45 @@ contract ProductCatalog {
         emit ProductAdded(productId, name, priceWei);
     }
 
+    function updateProduct(
+        bytes32 productId,
+        string memory name,
+        string memory description,
+        string memory imageUrl,
+        string memory category,
+        uint256 priceWei,
+        string memory sellerName,
+        uint256 stock,
+        StockStatus status,
+        string memory fullDescription,
+        string[] memory features,
+        string[] memory specLabels,
+        string[] memory specValues
+    ) external onlyAdmin {
+        require(products[productId].active, "Product not found");
+        require(bytes(name).length > 0, "Name required");
+        require(priceWei > 0, "Price required");
+        require(specLabels.length == specValues.length, "Spec mismatch");
+
+        Product storage product = products[productId];
+        product.name = name;
+        product.description = description;
+        product.imageUrl = imageUrl;
+        product.category = category;
+        product.priceWei = priceWei;
+        product.sellerName = sellerName;
+        product.stock = stock;
+        product.status = status;
+        product.fullDescription = fullDescription;
+        product.updatedAt = block.timestamp;
+
+        productFeatures[productId] = features;
+        productSpecLabels[productId] = specLabels;
+        productSpecValues[productId] = specValues;
+
+        emit ProductUpdated(productId);
+    }
+
     function updateProductStock(
         bytes32 productId,
         uint256 stock,
