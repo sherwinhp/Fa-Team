@@ -820,51 +820,44 @@
         }
 
         setMessage("Preparing review transaction...", "info");
-        const res = await fetch(`/confirmDeliveryByBuyer/${encodeURIComponent(trackingId)}`, {
+        const hasReviewData = ratingValue > 0 || commentHash || photoHash;
+        if (!hasReviewData) {
+          setMessage("Add a rating, comment, or photo to submit a review.", "error");
+          return;
+        }
+        const reviewRes = await fetch("/api/reviews/tx", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            productId,
+            trackingId,
+            rating: ratingValue,
+            commentHash,
+            photoHash
+          })
         });
-        const data = await res.json();
-        if (data && data.txData) {
-          await sendTransaction(data.txData);
-          const hasReviewData = ratingValue > 0 || commentHash || photoHash;
-          if (hasReviewData && productId) {
-            const reviewRes = await fetch("/api/reviews/tx", {
+        const reviewPayload = await reviewRes.json();
+        if (reviewPayload && reviewPayload.txData) {
+          await sendTransaction(reviewPayload.txData);
+          if (ratingValue > 0 && sellerAddress) {
+            const repRes = await fetch("/api/reputation/tx", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                productId,
+                seller: sellerAddress,
                 trackingId,
-                rating: ratingValue,
-                commentHash,
-                photoHash
+                rating: ratingValue
               })
             });
-            const reviewPayload = await reviewRes.json();
-            if (reviewPayload && reviewPayload.txData) {
-              await sendTransaction(reviewPayload.txData);
-            }
-            if (ratingValue > 0 && sellerAddress) {
-              const repRes = await fetch("/api/reputation/tx", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  seller: sellerAddress,
-                  trackingId,
-                  rating: ratingValue
-                })
-              });
-              const repPayload = await repRes.json();
-              if (repPayload && repPayload.txData) {
-                await sendTransaction(repPayload.txData);
-              }
+            const repPayload = await repRes.json();
+            if (repPayload && repPayload.txData) {
+              await sendTransaction(repPayload.txData);
             }
           }
-          setMessage("Review submitted. Confirm MetaMask prompts to finalize.", "success");
+          setMessage("Review submitted. Confirm the MetaMask prompts to finalize.", "success");
           setTimeout(() => window.location.reload(), 2200);
         } else {
-          setMessage(data?.message || "Unable to prepare review transaction.", "error");
+          setMessage(reviewPayload?.message || "Unable to prepare review transaction.", "error");
         }
       });
 

@@ -1002,7 +1002,15 @@ async function loadPaymentHistory(account, limit = 12) {
   const entries = [];
   for (const trackingId of uniqueIds) {
     try {
-      const [statusCode, statusTimestamp] = await contractInstance.methods.getShipmentStatus(trackingId).call();
+      const statusResult = await contractInstance.methods.getShipmentStatus(trackingId).call();
+      const statusCode =
+        statusResult && typeof statusResult === "object"
+          ? Number(statusResult[0] ?? statusResult.currentStatus ?? statusResult.status ?? 0)
+          : 0;
+      const statusTimestamp =
+        statusResult && typeof statusResult === "object"
+          ? statusResult[1] ?? statusResult.lastUpdateTime ?? 0
+          : 0;
       const shipment = await contractInstance.methods.getShipment(trackingId).call();
       const isBuyer = normalizeAddress(shipment.buyer) === accountLower;
       const isSeller = normalizeAddress(shipment.seller) === accountLower;

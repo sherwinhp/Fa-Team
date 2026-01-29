@@ -409,6 +409,7 @@
               <label style="font-size:13px;color:var(--muted);">Photo URL / Hash (optional)</label>
               <input id="deliveryPhoto" type="text" style="width:100%;border-radius:12px;border:1px solid var(--line);padding:10px;" />
               <button class="pill" id="confirmDeliveryButton" type="button">Confirm Delivery</button>
+              <div id="reviewMessage" style="font-size:13px;color:var(--muted);"></div>
             </div>
           </div>
         <% } %>
@@ -432,6 +433,7 @@
     const deliveryRating = document.getElementById("deliveryRating");
     const deliveryComment = document.getElementById("deliveryComment");
     const deliveryPhoto = document.getElementById("deliveryPhoto");
+    const reviewMessage = document.getElementById("reviewMessage");
     const reviewSection = document.getElementById("reviewSection");
     const reviewLocked = document.getElementById("reviewLocked");
     const allowedChains = ["0x539", "0x1691"];
@@ -498,6 +500,15 @@
         const state = index <= currentIndex ? "done" : "pending";
         return `<span class="pill ${state}">${label}</span>`;
       }).join("");
+    }
+
+    function setReviewMessage(text, tone = "info") {
+      if (!reviewMessage) {
+        return;
+      }
+      reviewMessage.textContent = text || "";
+      const color = tone === "error" ? "var(--danger)" : tone === "success" ? "var(--success)" : "var(--muted)";
+      reviewMessage.style.color = color;
     }
  
     async function loadTracking(){
@@ -575,7 +586,11 @@
 
     async function sendTransaction(txData){
       if(!window.ethereum){
-        alert("MetaMask not detected.");
+        if (reviewMessage) {
+          setReviewMessage("MetaMask not detected.", "error");
+        } else {
+          alert("MetaMask not detected.");
+        }
         return;
       }
       try{
@@ -584,7 +599,11 @@
           params: [txData]
         });
       }catch(err){
-        alert("Transaction canceled or failed.");
+        if (reviewMessage) {
+          setReviewMessage("Transaction canceled or failed.", "error");
+        } else {
+          alert("Transaction canceled or failed.");
+        }
       }
     }
 
@@ -624,12 +643,12 @@
     if(confirmDeliveryButton){
       confirmDeliveryButton.addEventListener("click", async () => {
         if(!currentShipment || Number(currentShipment.currentStatusCode) !== 4){
-          alert("Review is available only after delivery is marked completed.");
+          setReviewMessage("Review is available only after delivery is marked completed.", "error");
           return;
         }
         const onChain = await ensureGanacheChain();
         if(!onChain){
-          alert("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).");
+          setReviewMessage("Wrong network. Switch MetaMask to Ganache (Chain ID 1337).", "error");
           return;
         }
         const payload = {
@@ -637,56 +656,49 @@
           commentHash: deliveryComment ? deliveryComment.value.trim() : "",
           photoHash: deliveryPhoto ? deliveryPhoto.value.trim() : ""
         };
-        const res = await fetch(`/confirmDeliveryByBuyer/${encodeURIComponent(trackingId)}`, {
+        const productId = deliveryProduct ? deliveryProduct.value : "";
+        const hasReviewData = payload.rating > 0 || payload.commentHash || payload.photoHash;
+        if (!productId || !hasReviewData) {
+          setReviewMessage("Add a rating, comment, or photo to submit a review.", "error");
+          return;
+        }
+        setReviewMessage("Preparing review transaction...", "info");
+        const reviewRes = await fetch("/api/reviews/tx", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            productId,
+            trackingId,
+            rating: payload.rating,
+            commentHash: payload.commentHash,
+            photoHash: payload.photoHash
+          })
         });
-        const data = await res.json();
-        if(data && data.txData){
-          await sendTransaction(data.txData);
-          const ratingValue = payload.rating || 0;
-          const productId = deliveryProduct ? deliveryProduct.value : "";
-          const hasReviewData = ratingValue > 0 || payload.commentHash || payload.photoHash;
-          if (productId && hasReviewData) {
-            const reviewRes = await fetch("/api/reviews/tx", {
+        const reviewPayload = await reviewRes.json();
+        if (reviewPayload && reviewPayload.txData) {
+          await sendTransaction(reviewPayload.txData);
+          if (payload.rating > 0 && currentShipment && currentShipment.seller) {
+            const repRes = await fetch("/api/reputation/tx", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                productId,
+                seller: currentShipment.seller,
                 trackingId,
-                rating: ratingValue,
-                commentHash: payload.commentHash,
-                photoHash: payload.photoHash
+                rating: payload.rating
               })
             });
-            const reviewPayload = await reviewRes.json();
-            if (reviewPayload && reviewPayload.txData) {
-              await sendTransaction(reviewPayload.txData);
-            }
-
-            if (ratingValue > 0 && currentShipment && currentShipment.seller) {
-              const repRes = await fetch("/api/reputation/tx", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  seller: currentShipment.seller,
-                  trackingId,
-                  rating: ratingValue
-                })
-              });
-              const repPayload = await repRes.json();
-              if (repPayload && repPayload.txData) {
-                await sendTransaction(repPayload.txData);
-              }
-            }
+            const repPayload = await repRes.json();
+          if (repPayload && repPayload.txData) {
+              await sendTransaction(repPayload.txData);
           }
-          loadTracking();
-        } else {
-          alert(data && data.message ? data.message : "Unable to confirm delivery.");
         }
-      });
-    }
+        setReviewMessage("Review submitted. Confirm the MetaMask prompts to finalize.", "success");
+        loadTracking();
+      } else {
+        setReviewMessage(reviewPayload && reviewPayload.message ? reviewPayload.message : "Unable to prepare review.", "error");
+      }
+    });
+  }
   </script>
 </body>
 </html>

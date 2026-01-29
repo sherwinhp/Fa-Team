@@ -256,6 +256,142 @@
         font-weight: 600;
       }
 
+      .order-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 16px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+      }
+
+      .order-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .order-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .order-id {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--brand);
+        background: #eef2ff;
+        padding: 4px 8px;
+        border-radius: 999px;
+      }
+
+      .order-meta {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .order-meta span {
+        color: var(--ink);
+        font-weight: 600;
+        word-break: break-all;
+      }
+
+      .order-amount {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px dashed #dbe4ff;
+      }
+
+      .order-amount h4 {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .order-amount strong {
+        font-size: 16px;
+      }
+
+      .status-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 999px;
+        letter-spacing: 0.02em;
+      }
+
+      .status-actions {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .status-track {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .status-step {
+        text-align: center;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 6px 6px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        color: #6b7280;
+        border: 1px solid #e5e7eb;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .status-step.done {
+        background: #dcfce7;
+        color: #15803d;
+        border-color: #bbf7d0;
+      }
+
+      .status-step.current {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+      }
+
+      .status-select {
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        width: 100%;
+      }
+
+      .status-update-btn {
+        border: none;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 45%, #38bdf8 100%);
+        color: #fff;
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.25);
+      }
+
       .info-box {
         margin-top: 12px;
         border: 1px solid #bfdbfe;
@@ -281,6 +417,14 @@
         .row {
           grid-template-columns: 1fr;
           align-items: flex-start;
+        }
+
+        .order-card {
+          grid-template-columns: 1fr;
+        }
+
+        .status-track {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
       }
     </style>
@@ -483,32 +627,51 @@
           return;
         }
 
+        const statusSteps = ["Pending", "Picked Up", "In Transit", "Out For Delivery", "Delivered", "Failed"];
         orderList.innerHTML = orders.map((order) => {
           const badgeStyle = order.statusLabel === "Delivered"
-            ? "background:#ecfdf3;color:#16a34a;"
+            ? "background:#dcfce7;color:#15803d;"
             : order.statusLabel === "Failed"
-              ? "background:#fee2e2;color:#dc2626;"
-              : "background:#fef9c3;color:#ca8a04;";
+              ? "background:#fee2e2;color:#b91c1c;"
+              : "background:#fef3c7;color:#b45309;";
+          const createdAt = order.createdAt ? new Date(order.createdAt).toLocaleString() : "Unknown";
+          const updatedAt = order.lastUpdateTime ? new Date(order.lastUpdateTime).toLocaleString() : "Unknown";
+          const currentIndex = statusSteps.indexOf(order.statusLabel);
           return `
-            <div class="row">
+            <div class="order-card">
               <div>
-                <h4>${order.itemDescription || "Order"} <span class="pill">${order.trackingId}</span></h4>
-                <p>Buyer: ${order.buyer}</p>
-                <p>${new Date(order.createdAt).toLocaleString()}</p>
+                <div class="order-header">
+                  <h4 class="order-title">${order.itemDescription || "Marketplace order"}</h4>
+                  <span class="order-id">${order.trackingId}</span>
+                </div>
+                <div class="order-meta">
+                  <div>Buyer <span>${order.buyer || "Unknown"}</span></div>
+                  <div>Created <span>${createdAt}</span></div>
+                  <div>Last update <span>${updatedAt}</span></div>
+                </div>
               </div>
               <div>
-                <p>Amount</p>
-                <p><strong>${order.shipmentValue} ETH</strong> <span class="pill" style="${badgeStyle}">${order.statusLabel}</span></p>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
-                  <select data-status-select="${order.trackingId}" class="btn-outline">
-                    <option value="0">Pending</option>
-                    <option value="1">Picked Up</option>
-                    <option value="2">In Transit</option>
-                    <option value="3">Out For Delivery</option>
-                    <option value="4">Delivered</option>
-                    <option value="5">Failed</option>
+                <div class="order-amount">
+                  <div>
+                    <h4>Amount</h4>
+                    <strong>${order.shipmentValue} ETH</strong>
+                  </div>
+                  <span class="status-badge" style="${badgeStyle}">${order.statusLabel}</span>
+                </div>
+                <div class="status-track">
+                  ${statusSteps.map((label, index) => {
+                    const stateClass = index === currentIndex ? "current" : index < currentIndex ? "done" : "";
+                    return `<span class="status-step ${stateClass}">${label}</span>`;
+                  }).join("")}
+                </div>
+                <div class="status-actions">
+                  <select data-status-select="${order.trackingId}" class="status-select">
+                    ${statusSteps.map((label, index) => {
+                      const selected = index === currentIndex ? "selected" : "";
+                      return `<option value="${index}" ${selected}>${label}</option>`;
+                    }).join("")}
                   </select>
-                  <button class="btn-outline" data-update-status="${order.trackingId}">Update</button>
+                  <button class="status-update-btn" data-update-status="${order.trackingId}">Update Status</button>
                 </div>
               </div>
             </div>
