@@ -259,6 +259,25 @@
         return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
       };
 
+      const formatEthFromWei = (weiValue) => {
+        try {
+          const wei = BigInt(String(weiValue || "0"));
+          const divisor = 10n ** 18n;
+          const whole = wei / divisor;
+          const fraction = (wei % divisor).toString().padStart(18, "0").slice(0, 4);
+          return `${whole.toString()}.${fraction}`;
+        } catch (error) {
+          return "0.0000";
+        }
+      };
+
+      const formatTimestamp = (value) => {
+        const num = Number(value);
+        if (!Number.isFinite(num) || num <= 0) return null;
+        const ms = num > 10_000_000_000 ? num : num * 1000;
+        return new Date(ms).toLocaleString();
+      };
+
       const sha256 = async (data) => {
         const hashBuffer = await crypto.subtle.digest("SHA-256", data);
         return hashBufferToHex(hashBuffer);
@@ -273,22 +292,27 @@
         }).join("\\n");
 
         const stream = `BT /F1 12 Tf\\n${contentLines}\\nET`;
-        const objects = [];
-        objects.push("1 0 obj<< /Type /Catalog /Pages 2 0 R>>endobj");
-        objects.push("2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1>>endobj");
-        objects.push("3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources<< /Font<< /F1 4 0 R>> >> /Contents 5 0 R>>endobj");
-        objects.push("4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica>>endobj");
-        objects.push(`5 0 obj<< /Length ${stream.length}>>stream\\n${stream}\\nendstream endobj`);
+        const objects = [
+          "1 0 obj<< /Type /Catalog /Pages 2 0 R>>endobj",
+          "2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1>>endobj",
+          "3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources<< /Font<< /F1 4 0 R>> >> /Contents 5 0 R>>endobj",
+          "4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica>>endobj",
+          `5 0 obj<< /Length ${stream.length}>>stream\\n${stream}\\nendstream endobj`
+        ];
 
-        let offset = 0;
+        const header = "%PDF-1.3\\n";
+        let body = header;
+        let offset = header.length;
         const xref = ["xref", `0 ${objects.length + 1}`, "0000000000 65535 f "];
-        let body = "%PDF-1.3\\n";
+
         objects.forEach((obj) => {
           xref.push(String(offset).padStart(10, "0") + " 00000 n ");
           body += obj + "\\n";
           offset = body.length;
         });
-        const trailer = `trailer<< /Size ${objects.length + 1} /Root 1 0 R>>\\nstartxref\\n${offset}\\n%%EOF`;
+
+        const xrefOffset = body.length;
+        const trailer = `trailer<< /Size ${objects.length + 1} /Root 1 0 R>>\\nstartxref\\n${xrefOffset}\\n%%EOF`;
         return new TextEncoder().encode(body + xref.join("\\n") + "\\n" + trailer);
       };
 
@@ -297,11 +321,14 @@
           const res = await fetch(`/api/orders/${encodeURIComponent(trackingId)}`);
           const payload = await res.json();
           if (!res.ok || !payload.success) {
-            return null;
+            return {
+              success: false,
+              message: payload && payload.message ? payload.message : `Unable to load order (${res.status})`
+            };
           }
           return payload;
         } catch (err) {
-          return null;
+          return { success: false, message: err && err.message ? err.message : "Unable to load order" };
         }
       };
 
@@ -309,6 +336,17 @@
         const res = await fetch(`/api/shipping/${encodeURIComponent(trackingId)}`);
         if (!res.ok) return null;
         return res.json();
+      };
+
+      const fetchInvoice = async (trackingId) => {
+        try {
+          const res = await fetch(`/api/invoices/${encodeURIComponent(trackingId)}`);
+          const payload = await res.json();
+          if (!res.ok || !payload.success) return null;
+          return payload.invoice || null;
+        } catch (err) {
+          return null;
+        }
       };
 
       const setStatus = (el, status) => {
@@ -355,53 +393,126 @@
           }
 
           const shipment = await fetchShipment(trackingId);
-          if (!shipment) {
-            alert("Shipment not found.");
+          const orderDetails = await getOrderDetails(trackingId);
+          if (!orderDetails || !orderDetails.success) {
+            alert(orderDetails && orderDetails.message ? orderDetails.message : "Order details not found.");
             return;
           }
-
-          const orderDetails = await getOrderDetails(trackingId);
-          const items = orderDetails && orderDetails.orderItems ? orderDetails.orderItems : [];
+          const existingInvoice = await fetchInvoice(trackingId);
+          const hasInvoice = existingInvoice
+            && existingInvoice.buyer
+            && existingInvoice.buyer !== "0x0000000000000000000000000000000000000000";
+          const shipmentData = orderDetails.shipment || null;
+          const items = orderDetails.orderItems || [];
+          const fallbackBuyer = shipment && shipment.buyer ? shipment.buyer : "Unknown";
+          const buyerAddress = shipmentData && shipmentData.buyer ? shipmentData.buyer : fallbackBuyer;
+          const sellerOnChain = shipmentData && shipmentData.seller ? shipmentData.seller : (shipment && shipment.seller ? shipment.seller : "Unknown");
+          const recipientName = shipmentData && shipmentData.recipientName ? shipmentData.recipientName : "Marketplace Customer";
+          const recipientAddress = shipmentData && shipmentData.recipientAddress ? shipmentData.recipientAddress : "Address on file";
+          const itemDescription = shipmentData && shipmentData.itemDescription ? shipmentData.itemDescription : "On-chain order items";
+          const createdAt = shipmentData ? formatTimestamp(shipmentData.createdAt) : null;
           const buyerEmail = "<%= userEmail || '' %>";
-          const recipientAddress = shipment.recipientAddress || "Address on file";
-          const paymentTxHash = orderDetails && orderDetails.paymentTxHash ? orderDetails.paymentTxHash : "";
+          const paymentTxHash = orderDetails.paymentTxHash || "";
           const qrPayload = `${window.location.origin}/shipping/tracker?trackingId=${encodeURIComponent(trackingId)}`;
+          const lineItems = items.map((item, index) => {
+            const qty = Number(item.quantity || 0);
+            const unitPriceEth = formatEthFromWei(item.priceWei || "0");
+            let lineTotalEth = "0.0000";
+            try {
+              const lineTotalWei = BigInt(String(item.priceWei || "0")) * BigInt(qty || 0);
+              lineTotalEth = formatEthFromWei(lineTotalWei);
+            } catch (error) {
+              lineTotalEth = "0.0000";
+            }
+            return {
+              index: index + 1,
+              productId: item.productId || "N/A",
+              name: item.name || `Product ${index + 1}`,
+              quantity: qty || 1,
+              unitPriceEth,
+              lineTotalEth,
+              imageUrl: item.imageUrl || ""
+            };
+          });
+
+          let orderTotalWei = orderDetails.orderTotalWei || "0";
+          if (orderTotalWei === "0" && lineItems.length) {
+            try {
+              const computedWei = lineItems.reduce((sum, item) => {
+                const qty = Number(item.quantity || 0);
+                const unitWei = BigInt(String(items[item.index - 1]?.priceWei || "0"));
+                return sum + unitWei * BigInt(qty || 0);
+              }, 0n);
+              orderTotalWei = computedWei.toString();
+            } catch (error) {
+              orderTotalWei = "0";
+            }
+          }
+
+          const orderTotalEth = formatEthFromWei(orderTotalWei);
+          const shipmentValueEth = shipmentData && shipmentData.shipmentValue
+            ? formatEthFromWei(shipmentData.shipmentValue)
+            : (shipment && shipment.shipmentValue ? String(shipment.shipmentValue) : "0.0000");
           const lines = [
             "TrustedLedger Invoice",
+            `Invoice #: INV-${trackingId}-${Date.now()}`,
             "Seller: BlockChain Track",
             `Tracking ID: ${trackingId}`,
-            `Buyer Wallet: ${shipment.buyer || "Unknown"}`,
+            `Buyer Wallet: ${buyerAddress || "Unknown"}`,
             `Buyer Email: ${buyerEmail || "Unknown"}`,
-            `Delivery Address: ${recipientAddress || "Unknown"}`,
-            `Seller: ${shipment.seller || "Unknown"}`,
-            `Date: ${new Date().toLocaleString()}`,
-            `Amount (ETH): ${shipment.shipmentValue || "0"}`,
+            `Recipient: ${recipientName}`,
+            `Delivery Address: ${recipientAddress}`,
+            `Seller Wallet: ${sellerOnChain}`,
+            `Order Created: ${createdAt || new Date().toLocaleString()}`,
+            `Description: ${itemDescription}`,
+            `Order Total (ETH): ${orderTotalEth}`,
+            `Shipment Value (ETH): ${shipmentValueEth}`,
             `Payment Tx: ${paymentTxHash || "Pending"}`,
             `QR Payload: ${qrPayload}`,
             "Items:"
           ];
-          items.forEach((item, index) => {
-            lines.push(`- ${item.name || `Product ${index + 1}`} (${item.productId || "N/A"}) x${item.quantity || 1}`);
-            if (item.imageUrl) {
-              lines.push(`  Image: ${item.imageUrl}`);
-            }
-          });
+          if (!lineItems.length) {
+            lines.push("- No detailed items found on-chain.");
+          } else {
+            lineItems.forEach((item) => {
+              lines.push(`- ${item.name} (${item.productId}) x${item.quantity} @ ${item.unitPriceEth} ETH = ${item.lineTotalEth} ETH`);
+              if (item.imageUrl) {
+                lines.push(`  Image: ${item.imageUrl}`);
+              }
+            });
+          }
 
           const pdfBytes = buildPdf(lines);
           const invoiceHash = await sha256(pdfBytes);
 
-          const txRes = await fetch("/api/invoices/tx/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ trackingId, invoiceHash, account })
-          });
-          const txPayload = await txRes.json();
-          if (!txRes.ok || !txPayload.success) {
-            alert(txPayload.message || "Unable to register invoice.");
-            return;
+          if (!hasInvoice) {
+            const txRes = await fetch("/api/invoices/tx/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ trackingId, invoiceHash, account })
+            });
+            const txPayload = await txRes.json();
+            if (!txRes.ok || !txPayload.success) {
+              const message = String(txPayload.message || "Unable to register invoice.");
+              if (message.toLowerCase().includes("invoice exists")) {
+                alert("Invoice already registered for this tracking ID. Downloading a copy only.");
+              } else {
+                alert(message);
+                return;
+              }
+            } else {
+              await sendTx(txPayload.txData);
+              setStatus(invoiceStatus, "Pending");
+            }
+          } else {
+            const statusLabel = Number(existingInvoice.status || 0) === 1
+              ? "Approved"
+              : Number(existingInvoice.status || 0) === 2
+                ? "Rejected"
+                : "Pending";
+            setStatus(invoiceStatus, statusLabel);
+            alert("Invoice already registered for this tracking ID. Downloading a copy only.");
           }
-
-          await sendTx(txPayload.txData);
 
           const blob = new Blob([pdfBytes], { type: "application/pdf" });
           const url = URL.createObjectURL(blob);
@@ -410,7 +521,6 @@
           link.download = `invoice-${trackingId}.pdf`;
           link.click();
           URL.revokeObjectURL(url);
-          setStatus(invoiceStatus, "Pending");
         });
       }
 

@@ -1245,7 +1245,11 @@ app.get('/api/wallet', requireLogin, async (req, res) => {
 
 app.get('/admin', requireAdmin, async (req, res) => {
   const liveProducts = await getProductsForView();
-  res.render('admin-dashboard', { acct: account, products: liveProducts });
+  res.render('admin-dashboard', {
+    acct: account,
+    products: liveProducts,
+    ethUsdRate: ETH_USD_RATE
+  });
 });
 
 app.get('/api/users', requireAdmin, async (req, res) => {
@@ -3113,11 +3117,18 @@ app.post('/confirmDeliveryByBuyer/:trackingId', express.json(), async (req, res)
 // Prepare on-chain review transaction
 app.post('/api/reviews/tx', express.json(), async (req, res) => {
   try {
-    const { productId, trackingId, rating, commentHash, photoHash } = req.body || {};
+    const { productId, trackingId, rating, commentHash, photoHash, account: fromAccount } = req.body || {};
     if (!productId || !trackingId) {
       return res.status(400).json({
         success: false,
         message: 'Missing productId or trackingId'
+      });
+    }
+    const normalizedProductId = String(productId).trim();
+    if (!normalizedProductId.match(/^0x[a-fA-F0-9]{64}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid productId (expected 0x-prefixed 32-byte hash)'
       });
     }
 
@@ -3126,6 +3137,14 @@ app.post('/api/reviews/tx', express.json(), async (req, res) => {
       return res.status(500).json({
         success: false,
         message: 'Review contract not available'
+      });
+    }
+
+    const from = fromAccount || req.session?.web3Account || account || "";
+    if (!from || !from.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Connect MetaMask to continue.'
       });
     }
 
@@ -3141,7 +3160,7 @@ app.post('/api/reviews/tx', express.json(), async (req, res) => {
     const deliveryTxHash = web3Instance.utils.keccak256(`delivery:${trackingId}`);
 
     const tx = reviewContract.methods.submitReview(
-      productId,
+      normalizedProductId,
       purchaseId,
       ratingValue,
       String(commentHash || ""),
@@ -3149,11 +3168,11 @@ app.post('/api/reviews/tx', express.json(), async (req, res) => {
       deliveryTxHash
     );
 
-    const gasEstimate = await tx.estimateGas({ from: account });
+    const gasEstimate = await tx.estimateGas({ from });
     const gasPrice = await web3Instance.eth.getGasPrice();
 
     const txData = {
-      from: account,
+      from: from,
       to: reviewContract.options.address,
       data: tx.encodeABI(),
       gas: toHexQuantity(gasEstimate),
@@ -3489,7 +3508,7 @@ app.get('/api/invoices/:trackingId', async (req, res) => {
       });
     }
     const invoice = await notaryContract.methods.getInvoice(trackingId).call();
-    return res.json({ success: true, invoice });
+    return res.json(toDeepJsonSafe({ success: true, invoice }));
   } catch (error) {
     console.error('Error loading invoice:', error);
     return res.status(500).json({

@@ -437,31 +437,31 @@
         <div class="stat-card">
           <div>
             <h4>Total Products</h4>
-            <div class="value"><%= products ? products.length : 0 %></div>
+            <div class="value" id="statTotalProducts" data-count="<%= products ? products.length : 0 %>"><%= products ? products.length : 0 %></div>
           </div>
           <div class="stat-icon icon-blue">▣</div>
         </div>
         <div class="stat-card">
           <div>
             <h4>Total Orders</h4>
-            <div class="value">3</div>
-            <small>1 pending</small>
+            <div class="value" id="statTotalOrders">0</div>
+            <small id="statPendingOrders">0 pending</small>
           </div>
           <div class="stat-icon icon-green">▤</div>
         </div>
         <div class="stat-card">
           <div>
             <h4>Total Users</h4>
-            <div class="value">2</div>
-            <small>2 admins</small>
+            <div class="value" id="statTotalUsers">0</div>
+            <small id="statAdminUsers">0 admins</small>
           </div>
           <div class="stat-icon icon-purple">◉</div>
         </div>
         <div class="stat-card">
           <div>
             <h4>Total Revenue</h4>
-            <div class="value">$548.89</div>
-            <small>1 completed</small>
+            <div class="value" id="statTotalRevenue">$0.00</div>
+            <small id="statCompletedOrders">0 completed</small>
           </div>
           <div class="stat-icon icon-orange">▥</div>
         </div>
@@ -568,10 +568,87 @@
       const deleteButtons = Array.from(document.querySelectorAll(".delete-product"));
       const orderList = document.getElementById("orderList");
       const userList = document.getElementById("userList");
+      const statTotalProducts = document.getElementById("statTotalProducts");
+      const statTotalOrders = document.getElementById("statTotalOrders");
+      const statPendingOrders = document.getElementById("statPendingOrders");
+      const statTotalUsers = document.getElementById("statTotalUsers");
+      const statAdminUsers = document.getElementById("statAdminUsers");
+      const statTotalRevenue = document.getElementById("statTotalRevenue");
+      const statCompletedOrders = document.getElementById("statCompletedOrders");
       const registerUserButton = document.getElementById("registerUserButton");
       const newUserAddressInput = document.getElementById("newUserAddress");
       const allowedChains = ["0x539", "0x1691"];
+      const ethUsdRate = Number("<%= typeof ethUsdRate !== 'undefined' ? ethUsdRate : 0 %>") || 0;
       let contractAdmin = "";
+
+      const formatUsd = (value) => {
+        const amount = Number.isFinite(value) ? value : 0;
+        return `$${amount.toFixed(2)}`;
+      };
+
+      const getOrderStatusCode = (order) => {
+        if (order && typeof order.statusCode !== "undefined" && order.statusCode !== null) {
+          const code = Number(order.statusCode);
+          return Number.isFinite(code) ? code : 0;
+        }
+        const label = String(order && order.statusLabel ? order.statusLabel : "Pending");
+        switch (label) {
+          case "Picked Up":
+            return 1;
+          case "In Transit":
+            return 2;
+          case "Out For Delivery":
+            return 3;
+          case "Delivered":
+            return 4;
+          case "Failed":
+            return 5;
+          default:
+            return 0;
+        }
+      };
+
+      const updateProductStats = () => {
+        if (!statTotalProducts) {
+          return;
+        }
+        const count = Number(statTotalProducts.dataset.count || 0);
+        statTotalProducts.textContent = Number.isFinite(count) ? String(count) : "0";
+      };
+
+      const updateOrderStats = (orders) => {
+        if (!statTotalOrders || !statPendingOrders || !statTotalRevenue || !statCompletedOrders) {
+          return;
+        }
+        const list = Array.isArray(orders) ? orders : [];
+        const total = list.length;
+        const pending = list.filter((order) => getOrderStatusCode(order) === 0).length;
+        const completed = list.filter((order) => getOrderStatusCode(order) === 4).length;
+        const revenueEth = list.reduce((sum, order) => {
+          if (getOrderStatusCode(order) !== 4) {
+            return sum;
+          }
+          const value = Number(order.shipmentValue || 0);
+          return Number.isFinite(value) ? sum + value : sum;
+        }, 0);
+        const revenueUsd = ethUsdRate ? revenueEth * ethUsdRate : 0;
+
+        statTotalOrders.textContent = String(total);
+        statPendingOrders.textContent = `${pending} pending`;
+        statTotalRevenue.textContent = ethUsdRate ? formatUsd(revenueUsd) : `${revenueEth.toFixed(4)} ETH`;
+        statCompletedOrders.textContent = `${completed} completed`;
+      };
+
+      const updateUserStats = (users) => {
+        if (!statTotalUsers || !statAdminUsers) {
+          return;
+        }
+        const list = Array.isArray(users) ? users : [];
+        const total = list.length;
+        const admins = list.filter((user) => user.role === "admin" || user.role === "super_admin").length;
+        statTotalUsers.textContent = String(total);
+        statAdminUsers.textContent = `${admins} admins`;
+      };
 
       const loadContractAdmin = async () => {
         try {
@@ -753,9 +830,11 @@
                 </div>
               </div>
             `;
+            updateOrderStats([]);
             return;
           }
           renderOrders(payload.orders);
+          updateOrderStats(payload.orders);
         } catch (err) {
           orderList.innerHTML = `
             <div class="row">
@@ -765,6 +844,7 @@
               </div>
             </div>
           `;
+          updateOrderStats([]);
         }
       };
 
@@ -784,9 +864,11 @@
                 </div>
               </div>
             `;
+            updateUserStats([]);
             return;
           }
           renderUsers(payload.users);
+          updateUserStats(payload.users);
         } catch (err) {
           userList.innerHTML = `
             <div class="row">
@@ -796,8 +878,11 @@
               </div>
             </div>
           `;
+          updateUserStats([]);
         }
       };
+
+      updateProductStats();
 
       deleteButtons.forEach((button) => {
         button.addEventListener("click", async () => {

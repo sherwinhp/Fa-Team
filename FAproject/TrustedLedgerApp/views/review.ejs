@@ -825,6 +825,12 @@
           setMessage("Add a rating, comment, or photo to submit a review.", "error");
           return;
         }
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const account = accounts && accounts[0] ? accounts[0] : "";
+        if (!account) {
+          setMessage("Connect MetaMask to continue.", "error");
+          return;
+        }
         const reviewRes = await fetch("/api/reviews/tx", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -833,7 +839,8 @@
             trackingId,
             rating: ratingValue,
             commentHash,
-            photoHash
+            photoHash,
+            account
           })
         });
         const reviewPayload = await reviewRes.json();
