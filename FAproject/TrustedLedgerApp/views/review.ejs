@@ -354,6 +354,56 @@
         gap: 14px;
       }
 
+      .drop-zone {
+        position: relative;
+        border: 2px dashed rgba(37, 99, 235, 0.35);
+        border-radius: 16px;
+        padding: 18px;
+        transition: border-color 0.2s ease, background 0.2s ease;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .drop-zone.dragover {
+        border-color: rgba(37, 99, 235, 0.9);
+        background: rgba(37, 99, 235, 0.08);
+      }
+
+      .drop-zone.disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .drop-input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .drop-content {
+        text-align: center;
+        pointer-events: none;
+      }
+
+      .drop-title {
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      .drop-subtitle {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 4px;
+      }
+
+      .drop-preview {
+        display: none;
+        margin: 12px auto 0;
+        max-width: 160px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+      }
+
       .review-card {
         padding: 18px;
         border-radius: 18px;
@@ -453,7 +503,7 @@
           <div class="order-summary">
             <div><strong>Seller:</strong> <%= shipmentData && shipmentData.seller ? shipmentData.seller : "Unknown" %></div>
             <div><strong>Item:</strong> <%= shipmentData && shipmentData.itemDescription ? shipmentData.itemDescription : "On-chain product" %></div>
-            <div><strong>Value:</strong> <%= shipmentData && shipmentData.shipmentValue ? shipmentData.shipmentValue : "—" %> ETH</div>
+            <div><strong>Value:</strong> <%= typeof shipmentValueEth !== "undefined" ? Number(shipmentValueEth || 0).toFixed(4) : "—" %> ETH</div>
           </div>
           <% if (primaryProduct) { %>
             <div class="product-preview">
@@ -509,21 +559,29 @@
             <div class="badge" id="ratingValue">5</div>
           </div>
           <div class="form-row">
-            <label for="deliveryComment">Comment (hashed)</label>
+            <label for="deliveryComment">Comment (optional)</label>
             <textarea
               id="deliveryComment"
-              placeholder="Paste the hash of your verified experience notes..."
+              placeholder="Share your experience..."
               <%= delivered ? "" : "disabled" %>
             ></textarea>
           </div>
           <div class="form-row">
-            <label for="deliveryPhoto">Evidence hash (optional)</label>
-            <input
-              id="deliveryPhoto"
-              type="text"
-              placeholder="0x..."
-              <%= delivered ? "" : "disabled" %>
-            />
+            <label for="deliveryPhoto">Evidence image (optional)</label>
+            <div class="drop-zone" id="reviewDropZone" data-disabled="<%= delivered ? "false" : "true" %>">
+              <input
+                id="deliveryPhoto"
+                class="drop-input"
+                type="file"
+                accept="image/*"
+                <%= delivered ? "" : "disabled" %>
+              />
+              <div class="drop-content">
+                <div class="drop-title">Drop an image here</div>
+                <div class="drop-subtitle">or click to browse (PNG/JPG, max 5MB)</div>
+                <img id="evidencePreview" class="drop-preview" alt="Evidence preview" />
+              </div>
+            </div>
           </div>
           <button id="submitReview" class="primary-btn" type="button" <%= delivered && orderItems && orderItems.length ? "" : "disabled" %>>
             Submit review with MetaMask
@@ -603,7 +661,12 @@
                 <div class="meta-row">
                   <span>Tx: <%= review.blockchainTxHash.slice(0, 14) %>...</span>
                   <% if (review.photoHash) { %>
-                    <span>Photo: <%= review.photoHash %></span>
+                    <% const isImage = String(review.photoHash).startsWith("/uploads/reviews/"); %>
+                    <% if (isImage) { %>
+                      <img src="<%= review.photoHash %>" alt="Evidence" style="max-width:120px;border-radius:8px;" />
+                    <% } else { %>
+                      <span>Evidence: <%= review.photoHash %></span>
+                    <% } %>
                   <% } %>
                 </div>
                 <% if (review.adminReply) { %>
@@ -626,6 +689,8 @@
       const ratingValue = document.getElementById("ratingValue");
       const commentInput = document.getElementById("deliveryComment");
       const photoInput = document.getElementById("deliveryPhoto");
+      const dropZone = document.getElementById("reviewDropZone");
+      const evidencePreview = document.getElementById("evidencePreview");
       const reviewProduct = document.getElementById("reviewProduct");
       const reviewMessage = document.getElementById("reviewMessage");
 
@@ -643,6 +708,67 @@
         }
       });
 
+      if (dropZone) {
+        const isDisabled = dropZone.dataset.disabled === "true";
+        if (isDisabled) {
+          dropZone.classList.add("disabled");
+        }
+
+        const showPreview = (file) => {
+          if (!evidencePreview || !file) {
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            evidencePreview.src = String(event.target?.result || "");
+            evidencePreview.style.display = "block";
+          };
+          reader.readAsDataURL(file);
+        };
+
+        dropZone.addEventListener("click", () => {
+          if (!isDisabled) {
+            photoInput?.click();
+          }
+        });
+
+        dropZone.addEventListener("dragover", (event) => {
+          if (isDisabled) {
+            return;
+          }
+          event.preventDefault();
+          dropZone.classList.add("dragover");
+        });
+
+        dropZone.addEventListener("dragleave", () => {
+          dropZone.classList.remove("dragover");
+        });
+
+        dropZone.addEventListener("drop", (event) => {
+          if (isDisabled) {
+            return;
+          }
+          event.preventDefault();
+          dropZone.classList.remove("dragover");
+          const files = event.dataTransfer?.files;
+          if (files && files[0]) {
+            if (photoInput) {
+              photoInput.files = files;
+            }
+            showPreview(files[0]);
+          }
+        });
+
+        photoInput?.addEventListener("change", () => {
+          const file = photoInput.files && photoInput.files[0];
+          if (file) {
+            showPreview(file);
+          } else if (evidencePreview) {
+            evidencePreview.style.display = "none";
+          }
+        });
+      }
+
       reviewButton?.addEventListener("click", async () => {
         if (!delivered) {
           setMessage("Review submissions unlock once the order is marked Delivered.", "error");
@@ -659,7 +785,27 @@
         }
         const ratingValue = Number(ratingInput?.value || 0);
         const commentHash = commentInput ? commentInput.value.trim() : "";
-        const photoHash = photoInput ? photoInput.value.trim() : "";
+        let photoHash = "";
+        if (photoInput && photoInput.files && photoInput.files[0]) {
+          try {
+            const formData = new FormData();
+            formData.append("evidence", photoInput.files[0]);
+            const uploadRes = await fetch("/api/reviews/upload", {
+              method: "POST",
+              body: formData
+            });
+            const uploadData = await uploadRes.json();
+            if (uploadData && uploadData.success && uploadData.url) {
+              photoHash = uploadData.url;
+            } else {
+              setMessage(uploadData?.message || "Unable to upload evidence image.", "error");
+              return;
+            }
+          } catch (uploadError) {
+            setMessage("Unable to upload evidence image.", "error");
+            return;
+          }
+        }
 
         const payload = {
           rating: ratingValue,

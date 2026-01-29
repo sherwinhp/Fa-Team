@@ -71,6 +71,23 @@ let web3Instance = new Web3(WEB3_PROVIDER_URL);
 let contractInstance = null;
 let walletContractInstance = null;
 const upload = multer({ storage: multer.memoryStorage() });
+const reviewUploadDir = path.join(__dirname, "public", "uploads", "reviews");
+try {
+  fs.mkdirSync(reviewUploadDir, { recursive: true });
+} catch (error) {
+  console.warn("Unable to create review upload dir:", error.message || error);
+}
+const reviewUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, reviewUploadDir),
+    filename: (req, file, cb) => {
+      const safeName = String(file.originalname || "evidence")
+        .replace(/[^a-zA-Z0-9_.-]/g, "_");
+      cb(null, `${Date.now()}-${safeName}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 // Cart data is stored on-chain via MarketplaceCart.
 
@@ -1676,6 +1693,7 @@ app.get('/review/:trackingId', requireLogin, requireUser, async (req, res) => {
       ...item,
       priceEth: web3Instance.utils.fromWei(String(item.priceWei || "0"), 'ether')
     }));
+    const shipmentValueEth = web3Instance.utils.fromWei(String(shipmentData?.shipmentValue || "0"), 'ether');
     const primaryProduct = orderItems[0] || null;
     const reviewSummary = await loadReviewStats(primaryProduct ? primaryProduct.productId : "");
 
@@ -1695,6 +1713,7 @@ app.get('/review/:trackingId', requireLogin, requireUser, async (req, res) => {
       reviewCount: reviewSummary.reviewCount,
       sellerReputation,
       sellerAddress: sellerTarget,
+      shipmentValueEth,
       shipmentData,
       errorMessage: null
     });
@@ -2438,6 +2457,30 @@ app.post('/updateStatus/:trackingId', express.json(), async (req, res) => {
         message: 'Web3 not connected'
       });
     }
+
+    if (!account) {
+      return res.status(400).json({
+        success: false,
+        message: 'No MetaMask account connected'
+      });
+    }
+
+    let contractAdmin = "";
+    try {
+      contractAdmin = await contractInstance.methods.admin().call();
+    } catch (adminError) {
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to verify contract admin'
+      });
+    }
+
+    if (normalizeAddress(contractAdmin) !== normalizeAddress(account)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Connect the contract owner before updating order status'
+      });
+    }
     
     // Validate inputs
     if (status === undefined || status === null || !location) {
@@ -2683,6 +2726,28 @@ app.post('/api/reviews/tx', express.json(), async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || 'Unable to prepare review transaction'
+    });
+  }
+});
+
+// Upload review evidence image (simulation only)
+app.post('/api/reviews/upload', reviewUpload.single('evidence'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Evidence file required'
+      });
+    }
+    return res.json({
+      success: true,
+      url: `/uploads/reviews/${req.file.filename}`
+    });
+  } catch (error) {
+    console.error('Error uploading review evidence:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to upload evidence'
     });
   }
 });

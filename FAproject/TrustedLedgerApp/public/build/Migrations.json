@@ -12,7 +12,8 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function"
+      "type": "function",
+      "constant": true
     },
     {
       "inputs": [],
@@ -25,7 +26,8 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function"
+      "type": "function",
+      "constant": true
     },
     {
       "inputs": [
@@ -50,7 +52,7 @@
   "sourceMap": "341:373:2:-:0;;;;;;;391:10;341:373;;-1:-1:-1;;;;;;341:373:2;391:10;341:373;;;;;;;;;;;;;",
   "deployedSourceMap": "341:373:2:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;341:373:2;;;;;;-1:-1:-1;;;;;341:373:2;498:10;:19;341:373;;;;;;;;;;;-1:-1:-1;;;341:373:2;;;;;;;;;;;;;;;;;-1:-1:-1;;;341:373:2;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;341:373:2;;;;;;;;;;;;;;;;;;;;;;;;410:36;341:373;;;;;;;",
   "source": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.19; \r\n\r\n/*\r\n I declare that this code was written by me. \r\n I will not copy or allow others to copy my code. \r\n I understand that copying code is considered as plagiarism.\r\n \r\n Student Name: Chow Sherwin\r\n Student ID: 24046565\r\n Class: C002 - Team4\r\n Date created: November 2025\r\n */\r\n\r\ncontract Migrations {\r\n    address public owner = msg.sender;\r\n\r\n    uint public last_completed_migration;\r\n\r\n    modifier restricted() {\r\n    require(\r\n    msg.sender == owner,\r\n    \"This function is restricted to the contract's owner\"\r\n     );\r\n     _;\r\n }\r\n\r\n function setCompleted(uint completed) public restricted {\r\n    last_completed_migration = completed;\r\n    }\r\n}\r\n",
-  "sourcePath": "C:\\Users\\24048424\\Desktop\\C373 Distributed Ledger Technology\\FA Submmision\\FA\\Fa-Team\\FAproject\\contracts\\Migrations.sol",
+  "sourcePath": "C:\\Repulblic polytechnic\\y2 sem 2\\C373 DLT solutioning\\Fa Team\\FAproject\\contracts\\Migrations.sol",
   "ast": {
     "absolutePath": "project:/contracts/Migrations.sol",
     "exportedSymbols": {
@@ -459,12 +461,13 @@
     "5777": {
       "events": {},
       "links": {},
-      "address": "0xd1e8Ec1E383e7173D6a354D4Af1211cf3e735aD7",
-      "transactionHash": "0xdddc8484402dbebaaadf1314da54b5598fb0f6a86ba3b12f0a343621a17b6e0b"
+      "address": "0x9AA38E64d9ea34041e742f3bdcd96E84d2F3F5B9",
+      "transactionHash": "0xeee9982385f236083bebb2328f291c7eaa8613c508db17e5f8a9e6670b3fafe8"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2026-01-28T19:50:21.732Z",
+  "updatedAt": "2026-01-29T01:30:51.022Z",
+  "networkType": "ethereum",
   "devdoc": {
     "kind": "dev",
     "methods": {},
